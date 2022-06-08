@@ -17,7 +17,7 @@ ParallelChipDbDialog::ParallelChipDbDialog(ParallelChipDb *chipDb,
     ui->setupUi(this);
 
 #ifdef Q_OS_WIN32
-    QFont font("Courier New", 6);
+    QFont font("Courier New", 10);
     ui->chipDbTableView->setFont(font);
 #endif
 
