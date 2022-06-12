@@ -57,7 +57,7 @@ public:
     int getIdByChipId(uint32_t id1, uint32_t id2, uint32_t id3, uint32_t id4,
         uint32_t id5);
     QString getNameByChipId(uint32_t id1, uint32_t id2,
-        uint32_t id3, uint32_t id4, uint32_t id5) override;
+        uint32_t id3, uint32_t id4, uint32_t id5, uint32_t id6) override;
     uint32_t getChipParam(int chipIndex, int paramIndex);
     int setChipParam(int chipIndex, int paramIndex, uint32_t paramValue);
 };

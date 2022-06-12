@@ -177,6 +177,17 @@ int ParallelChipDb::getIdByChipId(uint32_t id1, uint32_t id2, uint32_t id3,
             continue;
         }
 
+        if (chipInfoVector[i]->getParam(ParallelChipInfo::CHIP_PARAM_ID6) ==
+            ChipDb::paramNotDefValue)
+        {
+            return i;
+        }
+        if (id5 != chipInfoVector[i]->
+            getParam(ParallelChipInfo::CHIP_PARAM_ID6))
+        {
+            continue;
+        }
+
         return i;
     }
 
@@ -184,7 +195,7 @@ int ParallelChipDb::getIdByChipId(uint32_t id1, uint32_t id2, uint32_t id3,
 }
 
 QString ParallelChipDb::getNameByChipId(uint32_t id1, uint32_t id2,
-    uint32_t id3, uint32_t id4, uint32_t id5)
+    uint32_t id3, uint32_t id4, uint32_t id5, uint32_t id6)
 {
     for(int i = 0; i < chipInfoVector.size(); i++)
     {
@@ -226,6 +237,17 @@ QString ParallelChipDb::getNameByChipId(uint32_t id1, uint32_t id2,
         }
         if (id5 != chipInfoVector[i]->
             getParam(ParallelChipInfo::CHIP_PARAM_ID5))
+        {
+            continue;
+        }
+
+        if (chipInfoVector[i]->getParam(ParallelChipInfo::CHIP_PARAM_ID6) ==
+            ChipDb::paramNotDefValue)
+        {
+            return chipInfoVector[i]->getName();
+        }
+        if (id6 != chipInfoVector[i]->
+            getParam(ParallelChipInfo::CHIP_PARAM_ID6))
         {
             continue;
         }

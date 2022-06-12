@@ -240,6 +240,8 @@ static void spi_flash_read_id(chip_id_t *chip_id)
     chip_id->device_id = spi_flash_read_byte();
     chip_id->third_id = spi_flash_read_byte();
     chip_id->fourth_id = spi_flash_read_byte();
+    chip_id->fifth_id = spi_flash_read_byte();
+    chip_id->sixth_id = spi_flash_read_byte();
 
     spi_flash_deselect_chip();
 }

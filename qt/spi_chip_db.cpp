@@ -170,7 +170,7 @@ int SpiChipDb::getIdByChipId(uint32_t id1, uint32_t id2, uint32_t id3,
 }
 
 QString SpiChipDb::getNameByChipId(uint32_t id1, uint32_t id2,
-    uint32_t id3, uint32_t id4, uint32_t id5)
+    uint32_t id3, uint32_t id4, uint32_t id5, uint32_t id6)
 {
     for(int i = 0; i < chipInfoVector.size(); i++)
     {
@@ -204,6 +204,14 @@ QString SpiChipDb::getNameByChipId(uint32_t id1, uint32_t id2,
             return chipInfoVector[i]->getName();
         }
         if (id5 != chipInfoVector[i]->getParam(SpiChipInfo::CHIP_PARAM_ID5))
+            continue;
+
+        if (chipInfoVector[i]->getParam(SpiChipInfo::CHIP_PARAM_ID6) ==
+            ChipDb::paramNotDefValue)
+        {
+            return chipInfoVector[i]->getName();
+        }
+        if (id6 != chipInfoVector[i]->getParam(SpiChipInfo::CHIP_PARAM_ID6))
             continue;
 
         return chipInfoVector[i]->getName();

@@ -13,6 +13,7 @@ typedef struct
     uint8_t third_id;
     uint8_t fourth_id;
     uint8_t fifth_id;
+    uint8_t sixth_id;
 } chip_id_t;
 
 #endif /* _CHIP_H_ */
