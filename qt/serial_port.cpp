@@ -4,11 +4,15 @@
  */
 
 #include "serial_port.h"
-#include <boost/bind.hpp>
+#include <QDebug>
 
-SerialPort::SerialPort()
+SerialPort::SerialPort(QObject *parent):
+    QObject(parent),
+    serialPort(new QSerialPort(this))
 {
-    timer = timer_ptr(new boost::asio::deadline_timer(ioService));
+    connect(&serialPort, &QSerialPort::readyRead, this, &SerialPort::handleReadyRead);
+    connect(&serialPort, &QSerialPort::errorOccurred, this, &SerialPort::handleError);
+    connect(&timer, &QTimer::timeout, this, &SerialPort::handleTimeout);
 }
 
 SerialPort::~SerialPort()
@@ -19,182 +23,160 @@ SerialPort::~SerialPort()
 int SerialPort::write(const char *buf, int size)
 {
     int ret;
-    boost::system::error_code ec;
 
-    if (!port)
+    if (!serialPort.isOpen())
     {
-        std::cerr << "Port is not opened" << std::endl;
+        qCritical() << serialPort.portName() << ": Port is not opened";
         return -1;
     }
 
     if (!size)
         return 0;
 
-    if (!(ret = port->write_some(boost::asio::buffer(buf, size), ec)))
+    ret = serialPort.write(buf, size);
+    if (ret == -1)
     {
-        std::cerr << "Write error: " << ec.message() << std::endl;
+        qCritical() << serialPort.portName() << ": Write error:" << serialPort.errorString();
         return -1;
     }
 
     return ret;
 }
 
-int SerialPort::read(char *buf, int size)
-{
-    int ret;
-    boost::system::error_code ec;
+//int SerialPort::read(char *buf, int size)
+//{
+//    if (!serialPort.isOpen())
+//    {
+//        qCritical() << serialPort.portName() << ": Port is not opened";
+//        return -1;
+//    }
 
-    if (!port || !port->is_open())
-    {
-        std::cerr << "Port is not opened" << std::endl;
-        return -1;
-    }
+//    if (!size)
+//        return 0;
 
-    if (!(ret = port->read_some(boost::asio::buffer(buf, size), ec)))
-    {
-        std::cerr << "Read error: " << ec.message() << std::endl;
-        return -1;
-    }
-
-    return ret;
-}
+//    buf_pointer = buf;
+//    buf_index = 0;
+//    buf_size = size;
+//    while(true) {
+//        if (serialPort.waitForReadyRead(5000)) {
+//            buf_index += serialPort.read(&buf_pointer[buf_index], buf_size - buf_index);
+//            qDebug() << "Read..";
+//            if(buf_index == buf_size) {
+//                qDebug() << "Read complite";
+//                return buf_size;
+//            }
+//        } else {
+//            qCritical() << serialPort.portName() << ": Read error:" << serialPort.errorString();
+//            return -1;
+//        }
+//    }
+//}
 
 int SerialPort::asyncRead(char *buf, int size, std::function<void(int)> cb)
 {
-    if (!port || !port->is_open())
+    buf_pointer = buf;
+    buf_index = 0;
+    buf_size = size;
+
+    if (!serialPort.isOpen())
     {
-        std::cerr << "Port is not opened" << std::endl;
+        qCritical() << serialPort.portName() << ": Port is not opened";
         return -1;
     }
 
     readCb = cb;
 
-    port->async_read_some(boost::asio::buffer(buf, size),
-        boost::bind(&SerialPort::onRead, this, boost::asio::placeholders::error,
-        boost::asio::placeholders::bytes_transferred));
+    buf_index = serialPort.read(buf, size);
 
-    thread = thread_ptr(new boost::thread(boost::bind(&boost::asio::
-        io_service::run, &ioService)));
+    if(buf_index)
+        readCb(buf_index);
 
     return 0;
-}
-
-void SerialPort::onRead(const boost::system::error_code &ec, size_t bytesRead)
-{
-    if (ec)
-    {
-        std::cerr << "Read error: " << ec.message() << std::endl;
-        readCb(-1);
-        return;
-    }
-
-    readCb(bytesRead);
 }
 
 int SerialPort::asyncReadWithTimeout(char *buf, int size,
     std::function<void (int)> cb, int timeout)
 {
-    if (!port || !port->is_open())
-    {
-        std::cerr << "Port is not opened" << std::endl;
-        return -1;
-    }
-
-    readCb = cb;
-
-    timer->expires_from_now(boost::posix_time::seconds(timeout));
-    timer->async_wait(boost::bind(&SerialPort::onTimeout, this,
-        boost::asio::placeholders::error));
-
-    port->async_read_some(boost::asio::buffer(buf, size),
-        boost::bind(&SerialPort::onReadWithTimeout, this,
-        boost::asio::placeholders::error,
-        boost::asio::placeholders::bytes_transferred));
-
-    if (!thread)
-    {
-        thread = thread_ptr(new boost::thread(boost::bind(&boost::asio::
-            io_service::run, &ioService)));
-    }
-
-    return 0;
+    timer.start(timeout * 1000);
+    return asyncRead(buf, size, cb);
 }
 
-void SerialPort::onReadWithTimeout(const boost::system::error_code &ec,
-    size_t bytesRead)
+void SerialPort::handleReadyRead()
 {
-    timer->cancel();
+    buf_index += serialPort.read(&buf_pointer[buf_index], buf_size - buf_index);
 
-    if (ec)
-    {
-        std::cerr << "Read error: " << ec.message() << std::endl;
-        readCb(-1);
-        return;
-    }
+    if(timer.isActive() && (buf_index == buf_size))
+        timer.stop();
 
-    readCb(bytesRead);
+    readCb(buf_index);
 }
 
-void SerialPort::onTimeout(const boost::system::error_code &e)
+void SerialPort::handleTimeout()
 {
-    if (!e)
-    {
-        std::cerr << "Read timeout: " << e.message() << std::endl;
-        port->cancel();
-        readCb(-1);
-    }
-    else if (e != boost::asio::error::operation_aborted)
-        std::cerr << "Timer setup error: " << e.message() << std::endl;
+    qCritical() << serialPort.portName() << ": Read timeout";
+    serialPort.close();
+    timer.stop();
+    readCb(-1);
 }
 
 bool SerialPort::start(const char *portName, int baudRate)
 {
-    boost::system::error_code ec;
-
-    if (port)
+    serialPort.setPortName(portName);
+    if(serialPort.isOpen())
     {
-        std::cerr << "Port is already opened" << std::endl;
+         qWarning() << serialPort.portName() << ": Port is already opened";
         return false;
     }
 
-    port = serial_port_ptr(new boost::asio::serial_port(ioService));
-    port->open(portName, ec);
-    if (ec)
+    if(serialPort.open(QIODevice::ReadWrite))
     {
-        std::cerr << "Failed to open " << portName << ": " << ec.message() <<
-            std::endl;
-        port = nullptr;
+        if(serialPort.setBaudRate(baudRate))
+        {
+            if(serialPort.isOpen())
+            {
+                qInfo() << serialPort.portName() << ": Opened";
+            }
+        }
+        else
+        {
+            qWarning() << serialPort.portName() << ": " + serialPort.errorString();
+            serialPort.close();
+            return false;
+        }
+    }
+    else
+    {
+        qWarning() << serialPort.portName() << ": " << serialPort.errorString();
+        serialPort.close();
         return false;
     }
-
-    port->set_option(boost::asio::serial_port_base::baud_rate(baudRate));
-    port->set_option(boost::asio::serial_port_base::character_size(8));
-    port->set_option(boost::asio::serial_port_base::
-        stop_bits(boost::asio::serial_port_base::stop_bits::one));
-    port->set_option(boost::asio::serial_port_base::
-        parity(boost::asio::serial_port_base::parity::none));
-    port->set_option(boost::asio::serial_port_base::
-        flow_control(boost::asio::serial_port_base::flow_control::none));
-
     return true;
 }
 
 void SerialPort::stop()
 {
-    if (timer)
-        timer->cancel();
+     timer.stop();
 
-    if (port)
+    if(serialPort.isOpen())
     {
-        port->cancel();
-        port->close();
-        port.reset();
-        port = nullptr;
+        serialPort.close();
+        qInfo() << serialPort.portName() << ": Closed";
     }
+}
 
-    ioService.stop();
-    ioService.reset();
-
-    if (thread)
-        thread = nullptr;
+void SerialPort::handleError(QSerialPort::SerialPortError serialPortError)
+{
+    if(serialPortError == QSerialPort::ReadError)
+    {
+        qCritical() << "An I/O error occurred while reading "
+                       << "the data from port %1, error: %2"
+                       << serialPort.portName()
+                       << serialPort.errorString();
+        timer.stop();
+    }
+    else if(serialPortError == QSerialPort::ResourceError)
+    {
+        qCritical() << serialPort.portName() << ": " << serialPort.errorString();
+        timer.stop();
+    }
 }

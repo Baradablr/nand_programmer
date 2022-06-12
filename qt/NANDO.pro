@@ -11,11 +11,10 @@
 
 QT += core gui
 
-greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
+greaterThan(QT_MAJOR_VERSION, 4): QT += widgets serialport
 
 TARGET = nando
 TEMPLATE = app
-
 
 unix: {
     # debian vars
@@ -83,17 +82,6 @@ FORMS += main_window.ui \
 
 QMAKE_CXXFLAGS += -std=c++11 -Wextra -Werror
 mingw:QMAKE_CXXFLAGS += -mno-ms-bitfields
-
-unix: {
-    # use static linking for boost to avoid version dependency issues
-    LIBS += -Wl,-Bstatic -lboost_system -lboost_thread -Wl,-Bdynamic
-}
-
-win32: {
-    INCLUDEPATH += C:/boost/include/boost-1_75
-    LIBS += -LC:/boost/lib -lws2_32 -lboost_system-mgw8-mt-x64-1_75 \
-      -lboost_thread-mgw8-mt-x64-1_75
-}
 
 DISTFILES += \
     nando_parallel_chip_db.csv \
