@@ -11,13 +11,12 @@ SerialPort::SerialPort(QObject *parent):
     serialPort(new QSerialPort(this))
 {
     connect(&serialPort, &QSerialPort::readyRead, this, &SerialPort::handleReadyRead);
-    connect(&serialPort, &QSerialPort::errorOccurred, this, &SerialPort::handleError);
     connect(&timer, &QTimer::timeout, this, &SerialPort::handleTimeout);
 }
 
 SerialPort::~SerialPort()
 {
-    stop();
+    close();
 }
 
 int SerialPort::write(const char *buf, int size)
@@ -113,13 +112,14 @@ void SerialPort::handleReadyRead()
 
 void SerialPort::handleTimeout()
 {
-    qCritical() << serialPort.portName() << ": Read timeout";
-    serialPort.close();
     timer.stop();
+    qCritical() << serialPort.portName() << ": Read timeout";
     readCb(-1);
+    close();
+    emit closed();
 }
 
-bool SerialPort::start(const char *portName)
+bool SerialPort::open(const char *portName)
 {
     serialPort.setPortName(portName);
     if(serialPort.isOpen())
@@ -131,6 +131,7 @@ bool SerialPort::start(const char *portName)
     if(serialPort.open(QIODevice::ReadWrite))
     {
         qInfo() << serialPort.portName() << ": Opened";
+        connect(&serialPort, &QSerialPort::errorOccurred, this, &SerialPort::handleError);
     }
     else
     {
@@ -144,8 +145,15 @@ bool SerialPort::start(const char *portName)
 void SerialPort::stop()
 {
      timer.stop();
+}
 
-    if(serialPort.isOpen())
+void SerialPort::close()
+{
+     timer.stop();
+
+     disconnect(&serialPort, &QSerialPort::errorOccurred, this, &SerialPort::handleError);
+
+     if(serialPort.isOpen())
     {
         serialPort.close();
         qInfo() << serialPort.portName() << ": Closed";
@@ -154,17 +162,10 @@ void SerialPort::stop()
 
 void SerialPort::handleError(QSerialPort::SerialPortError serialPortError)
 {
-    if(serialPortError == QSerialPort::ReadError)
-    {
-        qCritical() << "An I/O error occurred while reading "
-                       << "the data from port %1, error: %2"
-                       << serialPort.portName()
-                       << serialPort.errorString();
-        timer.stop();
-    }
-    else if(serialPortError == QSerialPort::ResourceError)
+    if(serialPortError != QSerialPort::NoError)
     {
         qCritical() << serialPort.portName() << ": " << serialPort.errorString();
-        timer.stop();
+        close();
+        emit closed();
     }
 }

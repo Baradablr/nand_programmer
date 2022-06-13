@@ -18,14 +18,13 @@ Reader::Reader()
 
 Reader::~Reader()
 {
-    stop();
 }
 
-void Reader::init(const QString &portName, uint8_t *rbuf,
+void Reader::init(SerialPort *serialPort, uint8_t *rbuf,
     uint32_t rlen, const uint8_t *wbuf, uint32_t wlen, bool isSkipBB,
     bool isReadLess)
 {
-    this->portName = portName;
+    this->serialPort = serialPort;
     this->rbuf = rbuf;
     this->rlen = rlen;
     this->wbuf = wbuf;
@@ -258,54 +257,16 @@ int Reader::read(char *pbuf, uint32_t len)
     return 0;
 }
 
-int Reader::serialPortCreate()
-{
-    serialPort = new SerialPort();
-
-    if (!serialPort->start(portName.toLatin1()))
-        return -1;
-
-    return 0;
-}
-
-void Reader::serialPortDestroy()
-{
-    if (!serialPort)
-        return;
-    serialPort->stop();
-    delete serialPort;
-    serialPort = nullptr;
-}
-
 void Reader::start()
 {
-    if (serialPortCreate())
-    {
-        emit result(-1);
-        goto Error;
-    }
-
     if (read(pbuf, bufSize) < 0)
     {
         emit result(-1);
-        goto Error;
+        return;
     }
 
     if (readStart())
-    {
         emit result(-1);
-        goto Error;
-    }
-
-    return;
-
-Error:
-    serialPortDestroy();
-}
-
-void Reader::stop()
-{
-    serialPortDestroy();
 }
 
 void Reader::logErr(const QString& msg)

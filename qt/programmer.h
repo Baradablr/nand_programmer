@@ -58,8 +58,6 @@ class Programmer : public QObject
     QString firmwareFileName;
     char *firmwareBuffer;
 
-    int serialPortConnect();
-    void serialPortDisconnect();
     int firmwareImageRead();
     void firmwareUpdateStart();
 
@@ -116,6 +114,7 @@ private slots:
     void confChipCb(int ret);
     void logCb(QtMsgType msgType, QString msg);
     void connectCb(int ret);
+    void disconnected();
     void getActiveImageCb(int ret);
     void firmwareUpdateCb(int ret);
     void firmwareUpdateProgressCb(unsigned int progress);

@@ -67,6 +67,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
     initBufTable();
 
     prog = new Programmer(this);
+    connect(prog, SIGNAL(connectCompleted(int)), this,
+        SLOT(slotProgConnectCompleted(int)));
     updateProgSettings();
 
     updateChipList();
@@ -202,7 +204,16 @@ void MainWindow::setUiStateConnected(bool isConnected)
     ui->detectPushButton->setEnabled(isConnected);
     ui->actionFirmwareUpdate->setEnabled(isConnected);
     if (!isConnected)
+    {
         ui->chipSelectComboBox->setCurrentIndex(CHIP_INDEX_DEFAULT);
+        ui->actionConnect->setText(tr("Connect"));
+        qInfo() << "Disconnected from programmer";
+    }
+    else
+    {
+        ui->actionConnect->setText(tr("Disconnect"));
+        qInfo() << "Connected to programmer";
+    }
 }
 
 void MainWindow::setUiStateSelected(bool isSelected)
@@ -216,33 +227,31 @@ void MainWindow::setUiStateSelected(bool isSelected)
 
 void MainWindow::slotProgConnectCompleted(int status)
 {
-    disconnect(prog, SIGNAL(connectCompleted(int)), this,
-        SLOT(slotProgConnectCompleted(int)));
-
     if (status < 0)
+    {
+        setUiStateConnected(false);
         return;
+    }
 
-    qInfo() << "Connected to programmer";
     setUiStateConnected(true);
-    ui->actionConnect->setText(tr("Disconnect"));
+
 }
+
+//void MainWindow::slotProgDisconnected()
+//{
+//    setUiStateConnected(false);
+//}
 
 void MainWindow::slotProgConnect()
 {
     if (!prog->isConnected())
     {
-        if (!prog->connect())
-        {
-            connect(prog, SIGNAL(connectCompleted(int)), this,
-                SLOT(slotProgConnectCompleted(int)));
-        }
+        prog->connect();
     }
     else
     {
         prog->disconnect();
         setUiStateConnected(false);
-        ui->actionConnect->setText(tr("Connect"));
-        qInfo() << "Disconnected from programmer";
     }
 }
 

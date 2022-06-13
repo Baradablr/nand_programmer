@@ -15,14 +15,13 @@ Writer::Writer()
 
 Writer::~Writer()
 {
-    stop();
 }
 
-void Writer::init(const QString &portName, uint8_t *buf,
+void Writer::init(SerialPort *serialPort, uint8_t *buf,
     uint32_t addr, uint32_t len, uint32_t pageSize, bool skipBB, bool incSpare,
     bool enableHwEcc, uint8_t startCmd, uint8_t dataCmd, uint8_t endCmd)
 {
-    this->portName = portName;
+    this->serialPort = serialPort;
     this->buf = buf;
     this->addr = addr;
     this->len = len;
@@ -303,43 +302,10 @@ int Writer::writeEnd()
     return 0;
 }
 
-int Writer::serialPortCreate()
-{
-    serialPort = new SerialPort();
-
-    if (!serialPort->start(portName.toLatin1()))
-        return -1;
-
-    return 0;
-}
-
-void Writer::serialPortDestroy()
-{
-    if (!serialPort)
-        return;
-    serialPort->stop();
-    delete serialPort;
-    serialPort = nullptr;
-}
-
 void Writer::start()
 {
-    if (serialPortCreate())
-        goto Exit;
-
     if (writeStart())
-        goto Exit;
-
-    return;
-
- Exit:
-    serialPortDestroy();
-    emit result(-1);
-}
-
-void Writer::stop()
-{
-    serialPortDestroy();
+        emit result(-1);
 }
 
 void Writer::logErr(const QString& msg)

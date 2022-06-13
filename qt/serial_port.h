@@ -18,8 +18,9 @@ public:
     explicit SerialPort(QObject *parent = nullptr);
     ~SerialPort();
 
-    bool start(const char *portName);
+    bool open(const char *portName);
     void stop();
+    void close();
 
     int write(const char *buf, int size);
 //    int read(char *buf, int size);
@@ -38,6 +39,9 @@ private slots:
     void handleReadyRead();
     void handleTimeout();
     void handleError(QSerialPort::SerialPortError error);
+
+signals:
+    void closed();
 };
 
 #endif // SERIAL_PORT_H
