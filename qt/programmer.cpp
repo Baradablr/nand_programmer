@@ -9,10 +9,8 @@
 
 #ifdef Q_OS_LINUX
   #define USB_DEV_NAME "/dev/ttyACM0"
-  #define SERIAL_PORT_SPEED 4000000
 #else
   #define USB_DEV_NAME "COM1"
-  #define SERIAL_PORT_SPEED 4000000
 #endif
 
 #define READ_TIMEOUT_MS 100
@@ -40,7 +38,7 @@ Programmer::~Programmer()
 
 int Programmer::serialPortConnect()
 {
-    if (!serialPort.start(usbDevName.toLatin1(), SERIAL_PORT_SPEED))
+    if (!serialPort.start(usbDevName.toLatin1()))
         return -1;
 
     return 0;
@@ -85,8 +83,8 @@ int Programmer::connect()
 
     writeData.clear();
     writeData.append(reinterpret_cast<const char *>(&cmd), sizeof(cmd));
-    reader.init(usbDevName, SERIAL_PORT_SPEED,
-        reinterpret_cast<uint8_t *>(&fwVersion), sizeof(fwVersion),
+    reader.init(usbDevName, reinterpret_cast<uint8_t *>(&fwVersion),
+        sizeof(fwVersion),
         reinterpret_cast<const uint8_t *>(writeData.constData()),
         static_cast<uint32_t>(writeData.size()), false, false);
     reader.start();
@@ -163,8 +161,7 @@ void Programmer::readChipId(ChipId *chipId)
 
     writeData.clear();
     writeData.append(reinterpret_cast<const char *>(&cmd), sizeof(cmd));
-    reader.init(usbDevName, SERIAL_PORT_SPEED,
-        reinterpret_cast<uint8_t *>(chipId), sizeof(ChipId),
+    reader.init(usbDevName, reinterpret_cast<uint8_t *>(chipId), sizeof(ChipId),
         reinterpret_cast<const uint8_t *>(writeData.constData()),
         static_cast<uint32_t>(writeData.size()), false, false);
     reader.start();
@@ -203,7 +200,7 @@ void Programmer::eraseChip(uint32_t addr, uint32_t len)
     writeData.clear();
     writeData.append(reinterpret_cast<const char *>(&eraseCmd),
         sizeof(eraseCmd));
-    reader.init(usbDevName, SERIAL_PORT_SPEED, nullptr, 0,
+    reader.init(usbDevName, nullptr, 0,
         reinterpret_cast<const uint8_t *>(writeData.constData()),
         static_cast<uint32_t>(writeData.size()), skipBB, false);
     reader.start();
@@ -240,7 +237,7 @@ void Programmer::readChip(uint8_t *buf, uint32_t addr, uint32_t len,
 
     writeData.clear();
     writeData.append(reinterpret_cast<const char *>(&readCmd), sizeof(readCmd));
-    reader.init(usbDevName, SERIAL_PORT_SPEED, buf, len,
+    reader.init(usbDevName, buf, len,
         reinterpret_cast<const uint8_t *>(writeData.constData()),
         static_cast<uint32_t>(writeData.size()), skipBB,
         isReadLess);
@@ -268,7 +265,7 @@ void Programmer::writeChip(uint8_t *buf, uint32_t addr, uint32_t len,
     QObject::connect(&writer, SIGNAL(progress(unsigned int)), this,
         SLOT(writeProgressCb(unsigned int)));
 
-    writer.init(usbDevName, SERIAL_PORT_SPEED, buf, addr, len, pageSize,
+    writer.init(usbDevName, buf, addr, len, pageSize,
         skipBB, incSpare, enableHwEcc, CMD_NAND_WRITE_S, CMD_NAND_WRITE_D,
         CMD_NAND_WRITE_E);
     writer.start();
@@ -293,7 +290,7 @@ void Programmer::readChipBadBlocks()
 
     writeData.clear();
     writeData.append(reinterpret_cast<const char *>(&cmd), sizeof(cmd));
-    reader.init(usbDevName, SERIAL_PORT_SPEED, nullptr, 0,
+    reader.init(usbDevName, nullptr, 0,
         reinterpret_cast<const uint8_t *>(writeData.constData()),
         static_cast<uint32_t>(writeData.size()), false, false);
     reader.start();
@@ -325,7 +322,7 @@ void Programmer::confChip(ChipInfo *chipInfo)
     writeData.clear();
     writeData.append(reinterpret_cast<const char *>(&confCmd), sizeof(confCmd));
     writeData.append(chipInfo->getHalConf());
-    reader.init(usbDevName, SERIAL_PORT_SPEED, nullptr, 0,
+    reader.init(usbDevName, nullptr, 0,
         reinterpret_cast<const uint8_t *>(writeData.constData()),
         static_cast<uint32_t>(writeData.size()), false, false);
     reader.start();
@@ -456,8 +453,7 @@ void Programmer::firmwareUpdateStart()
     QObject::connect(&writer, SIGNAL(progress(unsigned int)), this,
         SLOT(firmwareUpdateProgressCb(unsigned int)));
 
-    writer.init(usbDevName, SERIAL_PORT_SPEED,
-        reinterpret_cast<uint8_t *>(firmwareBuffer),
+    writer.init(usbDevName, reinterpret_cast<uint8_t *>(firmwareBuffer),
         firmwareImage[updateImage].address, firmwareImage[updateImage].size,
         flashPageSize, 0, 0, 0, CMD_FW_UPDATE_S, CMD_FW_UPDATE_D,
         CMD_FW_UPDATE_E);
@@ -505,7 +501,7 @@ void Programmer::firmwareUpdate(const QString &fileName)
 
     writeData.clear();
     writeData.append(reinterpret_cast<const char *>(&cmd), sizeof(cmd));
-    reader.init(usbDevName, SERIAL_PORT_SPEED, &activeImage,
+    reader.init(usbDevName, &activeImage,
         sizeof(activeImage),
         reinterpret_cast<const uint8_t *>(writeData.constData()),
         static_cast<uint32_t>(writeData.size()), false, false);

@@ -21,12 +21,11 @@ Reader::~Reader()
     stop();
 }
 
-void Reader::init(const QString &portName, qint32 baudRate, uint8_t *rbuf,
+void Reader::init(const QString &portName, uint8_t *rbuf,
     uint32_t rlen, const uint8_t *wbuf, uint32_t wlen, bool isSkipBB,
     bool isReadLess)
 {
     this->portName = portName;
-    this->baudRate = baudRate;
     this->rbuf = rbuf;
     this->rlen = rlen;
     this->wbuf = wbuf;
@@ -263,7 +262,7 @@ int Reader::serialPortCreate()
 {
     serialPort = new SerialPort();
 
-    if (!serialPort->start(portName.toLatin1(), baudRate))
+    if (!serialPort->start(portName.toLatin1()))
         return -1;
 
     return 0;

@@ -18,12 +18,11 @@ Writer::~Writer()
     stop();
 }
 
-void Writer::init(const QString &portName, qint32 baudRate, uint8_t *buf,
+void Writer::init(const QString &portName, uint8_t *buf,
     uint32_t addr, uint32_t len, uint32_t pageSize, bool skipBB, bool incSpare,
     bool enableHwEcc, uint8_t startCmd, uint8_t dataCmd, uint8_t endCmd)
 {
     this->portName = portName;
-    this->baudRate = baudRate;
     this->buf = buf;
     this->addr = addr;
     this->len = len;
@@ -308,7 +307,7 @@ int Writer::serialPortCreate()
 {
     serialPort = new SerialPort();
 
-    if (!serialPort->start(portName.toLatin1(), baudRate))
+    if (!serialPort->start(portName.toLatin1()))
         return -1;
 
     return 0;

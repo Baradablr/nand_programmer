@@ -18,7 +18,7 @@ public:
     explicit SerialPort(QObject *parent = nullptr);
     ~SerialPort();
 
-    bool start(const char *portName, int baudRate);
+    bool start(const char *portName);
     void stop();
 
     int write(const char *buf, int size);

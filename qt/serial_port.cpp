@@ -119,7 +119,7 @@ void SerialPort::handleTimeout()
     readCb(-1);
 }
 
-bool SerialPort::start(const char *portName, int baudRate)
+bool SerialPort::start(const char *portName)
 {
     serialPort.setPortName(portName);
     if(serialPort.isOpen())
@@ -130,19 +130,7 @@ bool SerialPort::start(const char *portName, int baudRate)
 
     if(serialPort.open(QIODevice::ReadWrite))
     {
-        if(serialPort.setBaudRate(baudRate))
-        {
-            if(serialPort.isOpen())
-            {
-                qInfo() << serialPort.portName() << ": Opened";
-            }
-        }
-        else
-        {
-            qWarning() << serialPort.portName() << ": " + serialPort.errorString();
-            serialPort.close();
-            return false;
-        }
+        qInfo() << serialPort.portName() << ": Opened";
     }
     else
     {
