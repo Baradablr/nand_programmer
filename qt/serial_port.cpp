@@ -10,7 +10,6 @@ SerialPort::SerialPort(QObject *parent):
     QObject(parent),
     serialPort(new QSerialPort(this))
 {
-    connect(&serialPort, &QSerialPort::readyRead, this, &SerialPort::handleReadyRead);
     connect(&timer, &QTimer::timeout, this, &SerialPort::handleTimeout);
 }
 
@@ -105,6 +104,10 @@ bool SerialPort::open(const char *portName)
         serialPort.close();
         return false;
     }
+
+    serialPort.readAll();
+    connect(&serialPort, &QSerialPort::readyRead, this, &SerialPort::handleReadyRead);
+
     return true;
 }
 
@@ -118,6 +121,7 @@ void SerialPort::close()
      timer.stop();
 
      disconnect(&serialPort, &QSerialPort::errorOccurred, this, &SerialPort::handleError);
+     disconnect(&serialPort, &QSerialPort::readyRead, this, &SerialPort::handleReadyRead);
 
      if(serialPort.isOpen())
     {

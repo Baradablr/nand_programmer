@@ -31,8 +31,6 @@ Programmer::Programmer(QObject *parent) : QObject(parent)
 
     QObject::connect(&serialPort, SIGNAL(closed(void)), this,
         SLOT(disconnected(void)));
-//    QObject::connect(&serialPort, SIGNAL(closed(void)), parent,
-//            SLOT(slotProgDisconnected(void)));
 }
 
 Programmer::~Programmer()
@@ -50,6 +48,7 @@ void Programmer::connectCb(int ret)
     if (ret < 0)
     {
         qCritical() << "Failed to read firmware version";
+        serialPort.close();
         return;
     }
 
