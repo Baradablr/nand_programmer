@@ -59,7 +59,7 @@ int Writer::read(char *data, uint32_t dataLen)
     std::function<void(int)> cb = std::bind(&Writer::readCb, this,
         std::placeholders::_1);
 
-    if (serialPort->asyncReadWithTimeout(data, dataLen, cb, READ_ACK_TIMEOUT)
+    if (serialPort->asyncRead(data, dataLen, cb, READ_ACK_TIMEOUT)
         < 0)
     {
         return -1;

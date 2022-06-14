@@ -42,47 +42,20 @@ int SerialPort::write(const char *buf, int size)
     return ret;
 }
 
-//int SerialPort::read(char *buf, int size)
-//{
-//    if (!serialPort.isOpen())
-//    {
-//        qCritical() << serialPort.portName() << ": Port is not opened";
-//        return -1;
-//    }
-
-//    if (!size)
-//        return 0;
-
-//    buf_pointer = buf;
-//    buf_index = 0;
-//    buf_size = size;
-//    while(true) {
-//        if (serialPort.waitForReadyRead(5000)) {
-//            buf_index += serialPort.read(&buf_pointer[buf_index], buf_size - buf_index);
-//            qDebug() << "Read..";
-//            if(buf_index == buf_size) {
-//                qDebug() << "Read complite";
-//                return buf_size;
-//            }
-//        } else {
-//            qCritical() << serialPort.portName() << ": Read error:" << serialPort.errorString();
-//            return -1;
-//        }
-//    }
-//}
-
-int SerialPort::asyncRead(char *buf, int size, std::function<void(int)> cb)
+int SerialPort::asyncRead(char *buf, int size, std::function<void(int)> cb, int timeout)
 {
-    buf_pointer = buf;
-    buf_index = 0;
-    buf_size = size;
-
     if (!serialPort.isOpen())
     {
         qCritical() << serialPort.portName() << ": Port is not opened";
         return -1;
     }
 
+    if(timeout)
+        timer.start(timeout * 1000);
+
+    buf_pointer = buf;
+    buf_index = 0;
+    buf_size = size;
     readCb = cb;
 
     buf_index = serialPort.read(buf, size);
@@ -91,13 +64,6 @@ int SerialPort::asyncRead(char *buf, int size, std::function<void(int)> cb)
         readCb(buf_index);
 
     return 0;
-}
-
-int SerialPort::asyncReadWithTimeout(char *buf, int size,
-    std::function<void (int)> cb, int timeout)
-{
-    timer.start(timeout * 1000);
-    return asyncRead(buf, size, cb);
 }
 
 void SerialPort::handleReadyRead()

@@ -23,9 +23,7 @@ public:
     void close();
 
     int write(const char *buf, int size);
-//    int read(char *buf, int size);
-    int asyncRead(char *buf, int size, std::function<void(int)> cb);
-    int asyncReadWithTimeout(char *buf, int size, std::function<void (int)> cb, int timeout);
+    int asyncRead(char *buf, int size, std::function<void(int)> cb, int timeout);
 
 private:
     int buf_size = 0;

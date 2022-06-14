@@ -248,7 +248,7 @@ int Reader::read(char *pbuf, uint32_t len)
     std::function<void(int)> cb = std::bind(&Reader::readCb, this,
         std::placeholders::_1);
 
-    if (serialPort->asyncReadWithTimeout(pbuf, len, cb, READ_TIMEOUT) < 0)
+    if (serialPort->asyncRead(pbuf, len, cb, READ_TIMEOUT) < 0)
     {
         logErr("Failed to read data");
         return -1;
