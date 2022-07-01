@@ -20,7 +20,7 @@ Reader::~Reader()
 {
 }
 
-void Reader::init(SerialPort *serialPort, uint8_t *rbuf,
+void Reader::init(SerialPort *serialPort, QVector<uint8_t> *rbuf,
     uint32_t rlen, const uint8_t *wbuf, uint32_t wlen, bool isSkipBB,
     bool isReadLess)
 {
@@ -160,7 +160,9 @@ int Reader::handleData(char *pbuf, uint32_t len)
         return -1;
     }
 
-    memcpy(rbuf + readOffset, data, dataSize);
+    QVector<uint8_t>tmp(dataSize);
+    memcpy(tmp.data(), data, dataSize);
+    rbuf->append(tmp);
     readOffset += dataSize;
     bytesRead += dataSize;
 

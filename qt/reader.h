@@ -16,7 +16,7 @@ class Reader : public QObject
     static const uint32_t bufSize = 4096;
 
     SerialPort *serialPort = nullptr;
-    uint8_t *rbuf;
+    QVector<uint8_t> *rbuf;
     uint32_t rlen;
     const uint8_t *wbuf;
     uint32_t wlen;
@@ -45,7 +45,7 @@ public:
     explicit Reader();
     ~Reader();
 
-    void init(SerialPort *serialPort, uint8_t *rbuf,
+    void init(SerialPort *serialPort, QVector<uint8_t> *rbuf,
         uint32_t rlen, const uint8_t *wbuf, uint32_t wlen, bool isSkipBB,
         bool isReadLess);
     void start();

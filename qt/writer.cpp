@@ -17,7 +17,7 @@ Writer::~Writer()
 {
 }
 
-void Writer::init(SerialPort *serialPort, uint8_t *buf,
+void Writer::init(SerialPort *serialPort, QVector<uint8_t> *buf,
     uint32_t addr, uint32_t len, uint32_t pageSize, bool skipBB, bool incSpare,
     bool enableHwEcc, uint8_t startCmd, uint8_t dataCmd, uint8_t endCmd)
 {
@@ -253,7 +253,7 @@ int Writer::writeStart()
 int Writer::writeData()
 {
     WriteDataCmd *writeDataCmd = reinterpret_cast<WriteDataCmd *>(pbuf);
-    uint32_t dataLen, dataLenMax, headerLen, pageLim;
+    uint32_t dataLen, dataLenMax, headerLen, pageLim, bufWriten = 0;
 
     writeDataCmd->cmd.code = dataCmd;
     headerLen = sizeof(WriteDataCmd);
@@ -269,10 +269,11 @@ int Writer::writeData()
             dataLen = pageLim - bytesWritten;
 
         writeDataCmd->len = static_cast<uint8_t>(dataLen);
-        memcpy(pbuf + headerLen, buf + bytesWritten, dataLen);
+        memcpy(pbuf + headerLen, buf->constData() + bufWriten, dataLen);
         if (write(pbuf, headerLen + dataLen))
             return -1;
 
+        bufWriten += dataLen;
         bytesWritten += dataLen;
         len -= dataLen;
 
