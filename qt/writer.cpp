@@ -74,8 +74,7 @@ int Writer::handleWriteAck(RespHeader *header, uint32_t len)
 
     if (len < static_cast<uint32_t>(size))
     {
-        logErr(QString("Write ack response is too short %1").arg(len));
-        return -1;
+        return 0;
     }
 
     bytesAcked = (reinterpret_cast<RespWriteAck *>(header))->ackBytes;
