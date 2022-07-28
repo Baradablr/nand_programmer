@@ -21,7 +21,7 @@ Reader::~Reader()
 }
 
 void Reader::init(SerialPort *serialPort, QVector<uint8_t> *rbuf,
-    uint32_t rlen, const uint8_t *wbuf, uint32_t wlen, bool isSkipBB,
+    quint64 rlen, const uint8_t *wbuf, uint32_t wlen, bool isSkipBB,
     bool isReadLess)
 {
     this->serialPort = serialPort;

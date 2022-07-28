@@ -18,11 +18,11 @@ class Writer : public QObject
 
     SerialPort *serialPort = nullptr;
     QVector<uint8_t> *buf;
-    uint32_t addr;
-    uint32_t len;
-    uint32_t pageSize;
-    uint32_t bytesAcked;
-    uint32_t bytesWritten;
+    quint64 addr;
+    quint64 len;
+    quint64 pageSize;
+    quint64 bytesAcked;
+    quint64 bytesWritten;
     bool skipBB;
     bool incSpare;
     bool enableHwEcc;
@@ -52,13 +52,13 @@ public:
     explicit Writer();
     ~Writer();
     void init(SerialPort *serialPort, QVector<uint8_t> *buf,
-        uint32_t addr, uint32_t len, uint32_t pageSize,
+        quint64 addr, quint64 len, uint32_t pageSize,
         bool skipBB, bool incSpare, bool enableHwEcc, uint8_t startCmd,
         uint8_t dataCmd, uint8_t endCmd);
     void start();
 signals:
     void result(int ret);
-    void progress(unsigned int progress);
+    void progress(quint64 progress);
     void log(QtMsgType msgType, QString msg);
 };
 
