@@ -430,8 +430,23 @@ void MainWindow::slotProgWrite()
     ui->filePathLineEdit->setDisabled(true);
     ui->selectFilePushButton->setDisabled(true);
 
-    buffer.reserve(pageSize);
-    buffer.resize(workFile.read((char *)buffer.data(), pageSize));
+    buffer.resize(pageSize);
+    qint64 readSize = workFile.read((char *)buffer.data(), pageSize);
+    if (readSize < 0)
+    {
+        qCritical() << "Failed to read file";
+        return;
+    }
+    else if (readSize == 0)
+    {
+        qInfo() << "File is empty";
+        return;
+    }
+    else if (readSize < pageSize)
+    {
+        uint32_t tail = pageSize - readSize;
+        memset(buffer.end() - tail, 0xFF, tail);
+    }
     prog->writeChip(&buffer, START_ADDRESS, progSize, pageSize);
 }
 
