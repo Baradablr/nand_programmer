@@ -430,6 +430,7 @@ void Programmer::firmwareUpdateProgressCb(quint64 progress)
 {
     emit firmwareUpdateProgress(progress * 100ULL /
         firmwareImage[updateImage].size);
+    memcpy(buf.data(), buf.data() + progress, flashPageSize);
 }
 
 void Programmer::firmwareUpdateCb(int ret)
