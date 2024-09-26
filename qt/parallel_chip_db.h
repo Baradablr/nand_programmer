@@ -69,6 +69,7 @@ public:
         CHIP_PARAM_ID3,
         CHIP_PARAM_ID4,
         CHIP_PARAM_ID5,
+        CHIP_PARAM_ID6,
         CHIP_PARAM_NUM,
     };
 
@@ -78,9 +79,9 @@ public:
     int getIdByChipId(uint32_t id1, uint32_t id2, uint32_t id3, uint32_t id4,
         uint32_t id5);
     QString getNameByChipId(uint32_t id1, uint32_t id2,
-        uint32_t id3, uint32_t id4, uint32_t id5) override;
-    uint32_t getChipParam(int chipIndex, int paramIndex);
-    int setChipParam(int chipIndex, int paramIndex, uint32_t paramValue);
+        uint32_t id3, uint32_t id4, uint32_t id5, uint32_t id6) override;
+    quint64 getChipParam(int chipIndex, int paramIndex);
+    int setChipParam(int chipIndex, int paramIndex, quint64 paramValue);
 };
 
 #endif // PARALLEL_CHIP_DB_H

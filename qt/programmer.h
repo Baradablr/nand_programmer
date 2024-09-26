@@ -13,7 +13,7 @@
 #include "reader.h"
 #include "cmd.h"
 #include "parallel_chip_db.h"
-#include "spi_chip_db.h"
+#include "spi_nor_db.h"
 #include "serial_port.h"
 
 using namespace std;
@@ -56,10 +56,9 @@ class Programmer : public QObject
     uint8_t activeImage;
     uint8_t updateImage;
     QString firmwareFileName;
-    char *firmwareBuffer;
+    QVector<uint8_t> buf;
+    ChipId *chipId_p;
 
-    int serialPortConnect();
-    void serialPortDisconnect();
     int firmwareImageRead();
     void firmwareUpdateStart();
 
@@ -80,9 +79,9 @@ public:
     bool isHwEccEnabled();
     void setHwEccEnabled(bool isHwEccEnabled);
     void readChipId(ChipId *chipId);
-    void eraseChip(uint32_t addr, uint32_t len);
-    void readChip(uint8_t *buf, uint32_t addr, uint32_t len, bool isReadLess);
-    void writeChip(uint8_t *buf, uint32_t addr, uint32_t len,
+    void eraseChip(quint64 addr, quint64 len);
+    void readChip(QVector<uint8_t> *buf, quint64 addr, quint64 len, bool isReadLess);
+    void writeChip(QVector<uint8_t> *buf, quint64 addr, quint64 len,
         uint32_t pageSize);
     void readChipBadBlocks();
     void confChip(ChipInfo *chipInfo);
@@ -91,34 +90,37 @@ public:
     void firmwareUpdate(const QString &fileName);
 
 signals:
-    void connectCompleted(int ret);
-    void readChipIdCompleted(int ret);
+    void connectCompleted(quint64 ret);
+    void readChipIdCompleted(quint64 ret);
     void writeChipCompleted(int ret);
-    void writeChipProgress(unsigned int progress);
-    void readChipCompleted(int ret);
-    void readChipProgress(unsigned int ret);
-    void eraseChipCompleted(int ret);
-    void eraseChipProgress(unsigned int progress);
-    void readChipBadBlocksCompleted(int ret);
-    void confChipCompleted(int ret);
+    void writeChipProgress(quint64 progress);
+    void readChipCompleted(quint64 ret);
+    void readChipProgress(quint64 ret);
+    void eraseChipCompleted(quint64 ret);
+    void eraseChipProgress(quint64 progress);
+    void readChipBadBlocksProgress(quint64 progress);
+    void readChipBadBlocksCompleted(quint64 ret);
+    void confChipCompleted(quint64 ret);
     void firmwareUpdateCompleted(int ret);
-    void firmwareUpdateProgress(unsigned int progress);
+    void firmwareUpdateProgress(quint64 progress);
 
 private slots:
-    void readChipIdCb(int ret);
+    void readChipIdCb(quint64 ret);
     void writeCb(int ret);
-    void writeProgressCb(unsigned int progress);
-    void readCb(int ret);
-    void readProgressCb(unsigned int progress);
-    void eraseChipCb(int ret);
-    void eraseProgressChipCb(unsigned int progress);
-    void readChipBadBlocksCb(int ret);
-    void confChipCb(int ret);
+    void writeProgressCb(quint64 progress);
+    void readCb(quint64 ret);
+    void readProgressCb(quint64 progress);
+    void eraseChipCb(quint64 ret);
+    void eraseProgressChipCb(quint64 progress);
+    void readChipBadBlocksCb(quint64 ret);
+    void readChipBadBlocksProgressCb(quint64 progress);
+    void confChipCb(quint64 ret);
     void logCb(QtMsgType msgType, QString msg);
-    void connectCb(int ret);
-    void getActiveImageCb(int ret);
+    void connectCb(quint64 ret);
+    void disconnected();
+    void getActiveImageCb(quint64 ret);
     void firmwareUpdateCb(int ret);
-    void firmwareUpdateProgressCb(unsigned int progress);
+    void firmwareUpdateProgressCb(quint64 progress);
 };
 
 #endif // PROGRAMMER_H

@@ -7,6 +7,7 @@
 #define SETTINGS_PROGRAMMER_DIALOG_H
 
 #include <QDialog>
+#include <QSerialPortInfo>
 
 namespace Ui {
 class SettingsProgrammerDialog;
@@ -27,9 +28,14 @@ public:
     bool isIncSpare();
     void setHwEccEnabled(bool enableHwEcc);
     bool isHwEccEnabled();
+    void setAlertEnabled(bool enableAlert);
+    bool isAlertEnabled();
 
 private:
     Ui::SettingsProgrammerDialog *ui;
+
+private slots:
+    void fillPortsInfo();
 };
 
 #endif // SETTINGS_PROGRAMMER_DIALOG_H

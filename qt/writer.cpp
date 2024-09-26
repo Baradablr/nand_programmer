@@ -15,15 +15,13 @@ Writer::Writer()
 
 Writer::~Writer()
 {
-    stop();
 }
 
-void Writer::init(const QString &portName, qint32 baudRate, uint8_t *buf,
-    uint32_t addr, uint32_t len, uint32_t pageSize, bool skipBB, bool incSpare,
+void Writer::init(SerialPort *serialPort, QVector<uint8_t> *buf,
+    quint64 addr, quint64 len, uint32_t pageSize, bool skipBB, bool incSpare,
     bool enableHwEcc, uint8_t startCmd, uint8_t dataCmd, uint8_t endCmd)
 {
-    this->portName = portName;
-    this->baudRate = baudRate;
+    this->serialPort = serialPort;
     this->buf = buf;
     this->addr = addr;
     this->len = len;
@@ -61,7 +59,7 @@ int Writer::read(char *data, uint32_t dataLen)
     std::function<void(int)> cb = std::bind(&Writer::readCb, this,
         std::placeholders::_1);
 
-    if (serialPort->asyncReadWithTimeout(data, dataLen, cb, READ_ACK_TIMEOUT)
+    if (serialPort->asyncRead(data, dataLen, cb, READ_ACK_TIMEOUT)
         < 0)
     {
         return -1;
@@ -76,8 +74,7 @@ int Writer::handleWriteAck(RespHeader *header, uint32_t len)
 
     if (len < static_cast<uint32_t>(size))
     {
-        logErr(QString("Write ack response is too short %1").arg(len));
-        return -1;
+        return 0;
     }
 
     bytesAcked = (reinterpret_cast<RespWriteAck *>(header))->ackBytes;
@@ -255,7 +252,7 @@ int Writer::writeStart()
 int Writer::writeData()
 {
     WriteDataCmd *writeDataCmd = reinterpret_cast<WriteDataCmd *>(pbuf);
-    uint32_t dataLen, dataLenMax, headerLen, pageLim;
+    uint32_t dataLen, dataLenMax, headerLen, pageLim, bufWriten = 0;
 
     writeDataCmd->cmd.code = dataCmd;
     headerLen = sizeof(WriteDataCmd);
@@ -271,10 +268,11 @@ int Writer::writeData()
             dataLen = pageLim - bytesWritten;
 
         writeDataCmd->len = static_cast<uint8_t>(dataLen);
-        memcpy(pbuf + headerLen, buf + bytesWritten, dataLen);
+        memcpy(pbuf + headerLen, buf->constData() + bufWriten, dataLen);
         if (write(pbuf, headerLen + dataLen))
             return -1;
 
+        bufWriten += dataLen;
         bytesWritten += dataLen;
         len -= dataLen;
 
@@ -304,43 +302,10 @@ int Writer::writeEnd()
     return 0;
 }
 
-int Writer::serialPortCreate()
-{
-    serialPort = new SerialPort();
-
-    if (!serialPort->start(portName.toLatin1(), baudRate))
-        return -1;
-
-    return 0;
-}
-
-void Writer::serialPortDestroy()
-{
-    if (!serialPort)
-        return;
-    serialPort->stop();
-    delete serialPort;
-    serialPort = nullptr;
-}
-
 void Writer::start()
 {
-    if (serialPortCreate())
-        goto Exit;
-
     if (writeStart())
-        goto Exit;
-
-    return;
-
- Exit:
-    serialPortDestroy();
-    emit result(-1);
-}
-
-void Writer::stop()
-{
-    serialPortDestroy();
+        emit result(-1);
 }
 
 void Writer::logErr(const QString& msg)

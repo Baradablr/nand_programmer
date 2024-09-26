@@ -7,11 +7,12 @@
 #define MAIN_WINDOW_H
 
 #include "programmer.h"
-#include "buffer_table_model.h"
 #include "parallel_chip_db.h"
-#include "spi_chip_db.h"
+#include "spi_nor_db.h"
+#include "spi_nand_db.h"
 #include <QMainWindow>
 #include <QVector>
+#include <QElapsedTimer>
 
 namespace Ui {
 class MainWindow;
@@ -29,11 +30,16 @@ public:
 private:
     Ui::MainWindow *ui;
     QVector<uint8_t> buffer;
-    BufferTableModel bufferTableModel;
     ChipId chipId;
     ParallelChipDb parallelChipDb;
-    SpiChipDb spiChipDb;
+    SpiNorDb spiNorDb;
+    SpiNandDb spiNandDb;
     ChipDb *currentChipDb;
+    QElapsedTimer timer;
+    bool isAlertEnabled;
+    QFile workFile;
+    quint64 areaSize;
+    uint32_t pageSize;
 
     void initBufTable();
     void resetBufTable();
@@ -47,34 +53,40 @@ private:
     void detectChipDelayed();
     void setChipNameDelayed();
 private slots:
-    void slotProgConnectCompleted(int status);
-    void slotProgReadDeviceIdCompleted(int status);
-    void slotProgReadCompleted(int readBytes);
-    void slotProgReadProgress(unsigned int progress);
+    void slotProgConnectCompleted(quint64 status);
+    void slotProgReadDeviceIdCompleted(quint64 status);
+    void slotProgReadCompleted(quint64 readBytes);
+    void slotProgReadProgress(quint64 progress);
+    void slotProgVerifyCompleted(quint64 readBytes);
+    void slotProgVerifyProgress(quint64 progress);
     void slotProgWriteCompleted(int status);
-    void slotProgWriteProgress(unsigned int progress);
-    void slotProgEraseCompleted(int status);
-    void slotProgEraseProgress(unsigned int progress);
-    void slotProgReadBadBlocksCompleted(int status);
-    void slotProgSelectCompleted(int status);
-    void slotProgDetectChipConfCompleted(int status);
-    void slotProgDetectChipReadChipIdCompleted(int status);
+    void slotProgWriteProgress(quint64 progress);
+    void slotProgEraseCompleted(quint64 status);
+    void slotProgEraseProgress(quint64 progress);
+    void slotProgReadBadBlocksCompleted(quint64 status);
+    void slotProgReadBadBlocksProgress(quint64 progress);
+    void slotProgSelectCompleted(quint64 status);
+    void slotProgDetectChipConfCompleted(quint64 status);
+    void slotProgDetectChipReadChipIdCompleted(quint64 status);
     void slotProgFirmwareUpdateCompleted(int status);
-    void slotProgFirmwareUpdateProgress(unsigned int progress);
+    void slotProgFirmwareUpdateProgress(quint64 progress);
+    void slotSelectFilePath();
+    void slotFilePathEditingFinished();
+
 public slots:
-    void slotFileOpen();
-    void slotFileSave();
     void slotProgConnect();
     void slotProgReadDeviceId();
     void slotProgErase();
     void slotProgRead();
+    void slotProgVerify();
     void slotProgWrite();
     void slotProgReadBadBlocks();
     void slotSelectChip(int selectedChipNum);
     void slotDetectChip();
     void slotSettingsProgrammer();
     void slotSettingsParallelChipDb();
-    void slotSettingsSpiChipDb();
+    void slotSettingsSpiNorDb();
+    void slotSettingsSpiNandDb();
     void slotAboutDialog();
     void slotFirmwareUpdateDialog();
 };

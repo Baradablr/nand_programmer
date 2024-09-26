@@ -7,10 +7,11 @@
 #include "ui_main_window.h"
 #include "settings_programmer_dialog.h"
 #include "parallel_chip_db_dialog.h"
-#include "spi_chip_db_dialog.h"
+#include "spi_nor_db_dialog.h"
+#include "spi_nand_db_dialog.h"
 #include "firmware_update_dialog.h"
 #include "parallel_chip_db.h"
-#include "spi_chip_db.h"
+#include "spi_nor_db.h"
 #include "logger.h"
 #include "about_dialog.h"
 #include "settings.h"
@@ -22,12 +23,11 @@
 #include <QMessageBox>
 #include <memory>
 #include <QTimer>
+#include <QTime>
 
 #define HEADER_ADDRESS_WIDTH 80
 #define HEADER_HEX_WIDTH 340
 #define BUFFER_ROW_HEIGHT 20
-
-#define START_ADDRESS 0x00000000
 
 #define CHIP_NAME_DEFAULT "NONE"
 #define CHIP_INDEX_DEFAULT 0
@@ -36,22 +36,15 @@
 
 void MainWindow::initBufTable()
 {
-    ui->bufferTableView->setModel(&bufferTableModel);
-    QHeaderView *verticalHeader = ui->bufferTableView->verticalHeader();
-    verticalHeader->setSectionResizeMode(QHeaderView::Fixed);
-    verticalHeader->setDefaultSectionSize(BUFFER_ROW_HEIGHT);
-    ui->bufferTableView->setColumnWidth(HEADER_ADDRESS_COL,
-        HEADER_ADDRESS_WIDTH);
-    ui->bufferTableView->setColumnWidth(HEADER_HEX_COL, HEADER_HEX_WIDTH);
 #ifdef Q_OS_WIN32
-    QFont font("Courier New", 6);
-    ui->bufferTableView->setFont(font);
+    QFont font("Courier New", 9);
+    ui->dataViewer->setFont(font);
 #endif
 }
 
 void MainWindow::resetBufTable()
 {
-    bufferTableModel.setBuffer(nullptr, 0);
+    ui->dataViewer->setFile(ui->filePathLineEdit->text());
     buffer.clear();
 }
 
@@ -65,8 +58,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
     logger->setTextEdit(ui->logTextEdit);
 
     initBufTable();
+#ifdef Q_OS_WIN32
+    QFont font("Courier New", 9);
+    ui->firstSpinBox->setFont(font);
+    ui->lastSpinBox->setFont(font);
+#endif
+    ui->firstSpinBox->setEnabled(false);
+    ui->lastSpinBox->setEnabled(false);
 
     prog = new Programmer(this);
+    connect(prog, SIGNAL(connectCompleted(quint64)), this,
+        SLOT(slotProgConnectCompleted(quint64)));
     updateProgSettings();
 
     updateChipList();
@@ -74,10 +76,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
     connect(ui->chipSelectComboBox, SIGNAL(currentIndexChanged(int)),
         this, SLOT(slotSelectChip(int)));
 
-    connect(ui->actionOpen, SIGNAL(triggered()), this,
-        SLOT(slotFileOpen()));
-    connect(ui->actionSave, SIGNAL(triggered()), this,
-        SLOT(slotFileSave()));
     connect(ui->actionConnect, SIGNAL(triggered()), this,
         SLOT(slotProgConnect()));
     connect(ui->actionReadId, SIGNAL(triggered()), this,
@@ -86,6 +84,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
         SLOT(slotProgErase()));
     connect(ui->actionRead, SIGNAL(triggered()), this,
         SLOT(slotProgRead()));
+    connect(ui->actionVerify, SIGNAL(triggered()), this,
+            SLOT(slotProgVerify()));
     connect(ui->actionWrite, SIGNAL(triggered()), this,
         SLOT(slotProgWrite()));
     connect(ui->actionReadBadBlocks, SIGNAL(triggered()), this,
@@ -94,14 +94,26 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
         SLOT(slotSettingsProgrammer()));
     connect(ui->actionParallelChipDb, SIGNAL(triggered()), this,
         SLOT(slotSettingsParallelChipDb()));
-    connect(ui->actionSpiChipDb, SIGNAL(triggered()), this,
-        SLOT(slotSettingsSpiChipDb()));
+    connect(ui->actionSpiNorDb, SIGNAL(triggered()), this,
+        SLOT(slotSettingsSpiNorDb()));
+    connect(ui->actionSpiNandDb, SIGNAL(triggered()), this,
+        SLOT(slotSettingsSpiNandDb()));
     connect(ui->actionAbout, SIGNAL(triggered()), this,
         SLOT(slotAboutDialog()));
     connect(ui->detectPushButton, SIGNAL(clicked()), this,
         SLOT(slotDetectChip()));
     connect(ui->actionFirmwareUpdate, SIGNAL(triggered()), this,
         SLOT(slotFirmwareUpdateDialog()));
+    connect(ui->selectFilePushButton, SIGNAL(clicked()), this,
+        SLOT(slotSelectFilePath()));
+    connect(ui->filePathLineEdit, SIGNAL(editingFinished()), this,
+        SLOT(slotFilePathEditingFinished()));
+
+    ui->filePathLineEdit->setText(QDir::tempPath() + "/nando_tmp.bin");
+    QSettings settings(SETTINGS_ORGANIZATION_NAME, SETTINGS_APPLICATION_NAME);
+    ui->filePathLineEdit->setText(settings.value(SETTINGS_WORK_FILE_PATH,
+        ui->filePathLineEdit->text()).toString());
+    ui->dataViewer->setFile(ui->filePathLineEdit->text());
 }
 
 MainWindow::~MainWindow()
@@ -110,99 +122,22 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::slotFileOpen()
-{
-    qint64 ret, fileSize;
-    QString fileName = QFileDialog::getOpenFileName(this, tr("Open File"), ".",
-        tr("Binary Files (*)"));
-
-    if (fileName.isNull())
-        return;
-
-    QFile file(fileName);
-    if (!file.open(QIODevice::ReadOnly))
-    {
-        qCritical() << "Failed to open file:" << fileName << ", error:" <<
-            file.errorString();
-        return;
-    }
-
-    resetBufTable();
-    fileSize = file.size();
-    buffer.resize(static_cast<int>(fileSize));
-    ret = file.read(reinterpret_cast<char *>(buffer.data()), fileSize);
-    if (ret < 0)
-    {
-        qCritical() << "Failed to read file:" << fileName << ", error:" <<
-            file.errorString();
-        goto Exit;
-    }
-
-    if (ret != fileSize)
-    {
-        qCritical() << "File was partially read, length" << ret;
-        goto Exit;
-    }
-
-    bufferTableModel.setBuffer(buffer.data(),
-        static_cast<uint32_t>(buffer.size()));
-
-Exit:
-    file.close();
-}
-
-void MainWindow::slotFileSave()
-{
-    qint64 ret;
-    uint8_t *buffer;
-    uint32_t size;
-    QString fileName;
-
-    bufferTableModel.getBuffer(buffer, size);
-
-    if (!size)
-    {
-        QMessageBox::information(this, tr("Information"),
-            tr("The buffer is empty"));
-        return;
-    }
-
-    fileName = QFileDialog::getSaveFileName(this, tr("Save buffer to file"),
-        ".", tr("Binary Files (*)"));
-
-    if (fileName.isNull())
-        return;
-
-    QFile file(fileName);
-    if (!file.open(QIODevice::WriteOnly))
-    {
-        qCritical() << "Failed to open file:" << fileName << ", error:" <<
-            file.errorString();
-        return;
-    }
-
-    ret = file.write(reinterpret_cast<char *>(buffer), size);
-    if (ret < 0)
-    {
-        qCritical() << "Failed to write file:" << fileName << ", error:" <<
-            file.errorString();
-    }
-    else if (ret != size)
-    {
-        qCritical() << "Failed to write file: written " << ret << " bytes of "
-            << size;
-    }
-
-    file.close();
-}
-
 void MainWindow::setUiStateConnected(bool isConnected)
 {
     ui->chipSelectComboBox->setEnabled(isConnected);
     ui->detectPushButton->setEnabled(isConnected);
     ui->actionFirmwareUpdate->setEnabled(isConnected);
     if (!isConnected)
+    {
         ui->chipSelectComboBox->setCurrentIndex(CHIP_INDEX_DEFAULT);
+        ui->actionConnect->setText(tr("Connect"));
+        qInfo() << "Disconnected from programmer";
+    }
+    else
+    {
+        ui->actionConnect->setText(tr("Disconnect"));
+        qInfo() << "Connected to programmer";
+    }
 }
 
 void MainWindow::setUiStateSelected(bool isSelected)
@@ -211,57 +146,68 @@ void MainWindow::setUiStateSelected(bool isSelected)
     ui->actionErase->setEnabled(isSelected);
     ui->actionRead->setEnabled(isSelected);
     ui->actionWrite->setEnabled(isSelected);
+    ui->actionVerify->setEnabled(isSelected);
     ui->actionReadBadBlocks->setEnabled(isSelected);
+
+    ui->firstSpinBox->setEnabled(isSelected);
+    ui->lastSpinBox->setEnabled(isSelected);
+    if (isSelected)
+    {
+        QString chipName = ui->chipSelectComboBox->currentText();
+        quint32 blocksCount = currentChipDb->blockCountGetByName(chipName);
+        ui->firstSpinBox->setMaximum(blocksCount - 1);
+        ui->firstSpinBox->setValue(0);
+        ui->lastSpinBox->setMaximum(blocksCount - 1);
+        ui->lastSpinBox->setValue(blocksCount - 1);
+        quint64 chipSize = prog->isIncSpare() ?
+            currentChipDb->extendedTotalSizeGetByName(chipName) :
+            currentChipDb->totalSizeGetByName(chipName);
+        ui->blockSizeValueLabel->setText(QString("0x%1").arg(chipSize / blocksCount, 8, 16, QLatin1Char( '0' )));
+    }
 }
 
-void MainWindow::slotProgConnectCompleted(int status)
+void MainWindow::slotProgConnectCompleted(quint64 status)
 {
-    disconnect(prog, SIGNAL(connectCompleted(int)), this,
-        SLOT(slotProgConnectCompleted(int)));
-
-    if (status < 0)
+    if (status == UINT64_MAX)
+    {
+        setUiStateConnected(false);
         return;
+    }
 
-    qInfo() << "Connected to programmer";
     setUiStateConnected(true);
-    ui->actionConnect->setText(tr("Disconnect"));
+
 }
 
 void MainWindow::slotProgConnect()
 {
     if (!prog->isConnected())
     {
-        if (!prog->connect())
-        {
-            connect(prog, SIGNAL(connectCompleted(int)), this,
-                SLOT(slotProgConnectCompleted(int)));
-        }
+        prog->connect();
     }
     else
     {
         prog->disconnect();
         setUiStateConnected(false);
-        ui->actionConnect->setText(tr("Connect"));
-        qInfo() << "Disconnected from programmer";
     }
 }
 
-void MainWindow::slotProgReadDeviceIdCompleted(int status)
+void MainWindow::slotProgReadDeviceIdCompleted(quint64 status)
 {
     QString idStr;
 
-    disconnect(prog, SIGNAL(readChipIdCompleted(int)), this,
-        SLOT(slotProgReadDeviceIdCompleted(int)));
+    disconnect(prog, SIGNAL(readChipIdCompleted(quint64)), this,
+        SLOT(slotProgReadDeviceIdCompleted(quint64)));
 
-    if (status < 0)
+    if (status == UINT64_MAX)
         return;
 
-    idStr = tr("0x%1 0x%2 0x%3 0x%4 0x%5")
+    idStr = tr("0x%1 0x%2 0x%3 0x%4 0x%5 0x%6")
         .arg(chipId.makerId, 2, 16, QLatin1Char('0'))
         .arg(chipId.deviceId, 2, 16, QLatin1Char('0'))
         .arg(chipId.thirdId, 2, 16, QLatin1Char('0'))
         .arg(chipId.fourthId, 2, 16, QLatin1Char('0'))
-        .arg(chipId.fifthId, 2, 16, QLatin1Char('0'));
+        .arg(chipId.fifthId, 2, 16, QLatin1Char('0'))
+        .arg(chipId.sixthId, 2, 16, QLatin1Char('0'));
     ui->deviceValueLabel->setText(idStr);
 
     qInfo() << QString("ID ").append(idStr).toLatin1().data();
@@ -270,17 +216,17 @@ void MainWindow::slotProgReadDeviceIdCompleted(int status)
 void MainWindow::slotProgReadDeviceId()
 {
     qInfo() << "Reading chip ID ...";
-    connect(prog, SIGNAL(readChipIdCompleted(int)), this,
-        SLOT(slotProgReadDeviceIdCompleted(int)));
+    connect(prog, SIGNAL(readChipIdCompleted(quint64)), this,
+        SLOT(slotProgReadDeviceIdCompleted(quint64)));
     prog->readChipId(&chipId);
 }
 
-void MainWindow::slotProgEraseCompleted(int status)
+void MainWindow::slotProgEraseCompleted(quint64 status)
 {
-    disconnect(prog, SIGNAL(eraseChipProgress(unsigned int)), this,
-        SLOT(slotProgEraseProgress(unsigned int)));
-    disconnect(prog, SIGNAL(eraseChipCompleted(int)), this,
-        SLOT(slotProgEraseCompleted(int)));
+    disconnect(prog, SIGNAL(eraseChipProgress(quint64)), this,
+        SLOT(slotProgEraseProgress(quint64)));
+    disconnect(prog, SIGNAL(eraseChipCompleted(quint64)), this,
+        SLOT(slotProgEraseCompleted(quint64)));
 
     if (!status)
         qInfo() << "Chip has been erased successfully";
@@ -288,26 +234,24 @@ void MainWindow::slotProgEraseCompleted(int status)
     setProgress(100);
 }
 
-void MainWindow::slotProgEraseProgress(unsigned int progress)
+void MainWindow::slotProgEraseProgress(quint64 progress)
 {
     uint32_t progressPercent;
-    QString chipName = ui->chipSelectComboBox->currentText();
-    uint32_t eraseSize = prog->isIncSpare() ?
-        currentChipDb->extendedTotalSizeGetByName(chipName) :
-        currentChipDb->totalSizeGetByName(chipName);
 
-    progressPercent = progress * 100ULL / eraseSize;
+    progressPercent = progress * 100ULL / areaSize;
     setProgress(progressPercent);
 }
 
 void MainWindow::slotProgErase()
 {
-    QString chipName = ui->chipSelectComboBox->currentText();
-    uint32_t eraseSize = prog->isIncSpare() ?
-        currentChipDb->extendedTotalSizeGetByName(chipName) :
-        currentChipDb->totalSizeGetByName(chipName);
+    quint64 start_address =
+            ui->blockSizeValueLabel->text().toULongLong(nullptr, 16)
+            * ui->firstSpinBox->value();
+    areaSize =
+            ui->blockSizeValueLabel->text().toULongLong(nullptr, 16)
+            * (ui->lastSpinBox->value() + 1) - start_address;
 
-    if (!eraseSize)
+    if (!areaSize)
     {
         qCritical() << "Chip size is not set";
         return;
@@ -317,111 +261,295 @@ void MainWindow::slotProgErase()
 
     setProgress(0);
 
-    connect(prog, SIGNAL(eraseChipCompleted(int)), this,
-        SLOT(slotProgEraseCompleted(int)));
-    connect(prog, SIGNAL(eraseChipProgress(unsigned int)), this,
-        SLOT(slotProgEraseProgress(unsigned int)));
+    connect(prog, SIGNAL(eraseChipCompleted(quint64)), this,
+        SLOT(slotProgEraseCompleted(quint64)));
+    connect(prog, SIGNAL(eraseChipProgress(quint64)), this,
+        SLOT(slotProgEraseProgress(quint64)));
 
-    prog->eraseChip(START_ADDRESS, eraseSize);
+    prog->eraseChip(start_address, areaSize);
 }
 
-void MainWindow::slotProgReadCompleted(int readBytes)
+void MainWindow::slotProgReadCompleted(quint64 readBytes)
 {
-    disconnect(prog, SIGNAL(readChipProgress(unsigned int)), this,
-        SLOT(slotProgReadProgress(unsigned int)));
-    disconnect(prog, SIGNAL(readChipCompleted(int)), this,
-        SLOT(slotProgReadCompleted(int)));
+    disconnect(prog, SIGNAL(readChipProgress(quint64)), this,
+        SLOT(slotProgReadProgress(quint64)));
+    disconnect(prog, SIGNAL(readChipCompleted(quint64)), this,
+        SLOT(slotProgReadCompleted(quint64)));
+
+    ui->filePathLineEdit->setDisabled(false);
+    ui->selectFilePushButton->setDisabled(false);
 
     setProgress(100);
 
-    if (readBytes < 0)
+    if (readBytes == UINT64_MAX)
     {
-        buffer.clear();
+        workFile.close();
         return;
     }
 
-    if (readBytes > buffer.size())
+    workFile.write((const char *)buffer.constData(), buffer.size());
+
+    if (readBytes != (quint64)workFile.size())
     {
-        qCritical() << "Read operation returned more than requested: " <<
-            readBytes << ">" << buffer.size();
-        return;
+        qCritical() << "Read operation returned more or less than requested: " <<
+            readBytes << "!=" << workFile.size();
+        workFile.resize(0);
     }
 
+    workFile.close();
     qInfo() << "Data has been successfully read";
-    bufferTableModel.setBuffer(buffer.data(), readBytes);
+    ui->dataViewer->setFile(ui->filePathLineEdit->text());
 }
 
-void MainWindow::slotProgReadProgress(unsigned int progress)
+void MainWindow::slotProgReadProgress(quint64 progress)
 {
     uint32_t progressPercent;
-    QString chipName = ui->chipSelectComboBox->currentText();
-    uint32_t readSize = prog->isIncSpare() ?
-        currentChipDb->extendedTotalSizeGetByName(chipName) :
-        currentChipDb->totalSizeGetByName(chipName);
 
-    progressPercent = progress * 100ULL / readSize;
+    progressPercent = progress * 100ULL / areaSize;
     setProgress(progressPercent);
+
+    workFile.write((const char *)buffer.constData(), buffer.size());
+    buffer.clear();
 }
 
 void MainWindow::slotProgRead()
 {
-    QString chipName = ui->chipSelectComboBox->currentText();
-    uint32_t readSize = prog->isIncSpare() ?
-        currentChipDb->extendedTotalSizeGetByName(chipName) :
-        currentChipDb->totalSizeGetByName(chipName);
+    quint64 start_address =
+            ui->blockSizeValueLabel->text().toULongLong(nullptr, 16)
+            * ui->firstSpinBox->value();
+    areaSize  =
+            ui->blockSizeValueLabel->text().toULongLong(nullptr, 16)
+            * (ui->lastSpinBox->value() + 1) - start_address;
 
-    if (!readSize)
+    if (!areaSize)
     {
         qCritical() << "Chip size is not set";
         return;
     }
 
+    workFile.setFileName(ui->filePathLineEdit->text());
+    if (workFile.exists())
+    {
+        QMessageBox msgBox;
+        msgBox.setIcon(QMessageBox::Warning);
+        msgBox.setText("Replace data in current file?");
+        msgBox.setInformativeText("Selected file name is exist.");
+        msgBox.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
+        msgBox.setDefaultButton(QMessageBox::Cancel);
+        if (msgBox.exec() == QMessageBox::Cancel)
+        {
+            workFile.close();
+            return;
+        }
+    }
+
+    if (!workFile.open(QIODevice::WriteOnly))
+    {
+        qCritical() << "Failed to open file:" << ui->filePathLineEdit->text()
+            << ", error:" << workFile.errorString();
+        return;
+    }
+
+    workFile.resize(0);
     resetBufTable();
     buffer.clear();
-    buffer.resize(static_cast<int>(readSize));
 
     qInfo() << "Reading data ...";
     setProgress(0);
 
-    connect(prog, SIGNAL(readChipCompleted(int)), this,
-        SLOT(slotProgReadCompleted(int)));
-    connect(prog, SIGNAL(readChipProgress(unsigned int)), this,
-        SLOT(slotProgReadProgress(unsigned int)));
+    connect(prog, SIGNAL(readChipCompleted(quint64)), this,
+        SLOT(slotProgReadCompleted(quint64)));
+    connect(prog, SIGNAL(readChipProgress(quint64)), this,
+        SLOT(slotProgReadProgress(quint64)));
 
-    prog->readChip(buffer.data(), START_ADDRESS, readSize, true);
+    ui->filePathLineEdit->setDisabled(true);
+    ui->selectFilePushButton->setDisabled(true);
+
+    prog->readChip(&buffer, start_address, areaSize, true);
+}
+
+void MainWindow::slotProgVerifyCompleted(quint64 readBytes)
+{
+    disconnect(prog, SIGNAL(readChipProgress(quint64)), this,
+               SLOT(slotProgVerifyProgress(quint64)));
+    disconnect(prog, SIGNAL(readChipCompleted(quint64)), this,
+               SLOT(slotProgVerifyCompleted(quint64)));
+
+    ui->filePathLineEdit->setDisabled(false);
+    ui->selectFilePushButton->setDisabled(false);
+
+    setProgress(100);
+    workFile.close();
+    buffer.clear();
+
+    qInfo() << readBytes << " bytes read. Verify end."  ;
+}
+
+void MainWindow::slotProgVerifyProgress(quint64 progress)
+{
+    uint32_t progressPercent;
+
+    progressPercent = progress * 100ULL / areaSize;
+    setProgress(progressPercent);
+
+    QVector<uint8_t> cmpBuffer;
+    cmpBuffer.resize(buffer.size());
+
+    qint64 readSize = workFile.read((char *)cmpBuffer.data(), buffer.size());
+
+    if (readSize < 0)
+    {
+        qCritical() << "Failed to read file";
+    }
+    else if (readSize == 0)
+    {
+        qCritical() << "File read 0 byte";
+    }
+
+    for(uint32_t i = 0; i < readSize; i++)
+    {
+        if(cmpBuffer.at(i) != buffer.at(i))
+        {
+            uint64_t block = progress / ui->blockSizeValueLabel->text().toULongLong(nullptr, 16)
+                             + ui->firstSpinBox->text().toULongLong(nullptr, 10) - 1;
+            uint64_t byte = progress - ui->blockSizeValueLabel->text().toULongLong(nullptr, 16)
+                            + ui->firstSpinBox->text().toULongLong(nullptr, 10)
+                            * ui->blockSizeValueLabel->text().toULongLong(nullptr, 16) + i;
+            qCritical() << "Wrong block: " << QString("%1").arg(block)
+                << ", Wrong byte addr: "
+                << QString("0x%1").arg(byte, 8, 16, QLatin1Char( '0' ));
+            break;
+        }
+    }
+
+    buffer.clear();
+}
+
+void MainWindow::slotProgVerify()
+{
+    int index;
+    QString chipName;
+
+    workFile.setFileName(ui->filePathLineEdit->text());
+    if (!workFile.open(QIODevice::ReadOnly))
+    {
+        qCritical() << "Failed to open compare file:" << ui->filePathLineEdit->text() << ", error:" <<
+            workFile.errorString();
+        return;
+    }
+    if (!workFile.size())
+    {
+        qInfo() << "Compare file is empty";
+        return;
+    }
+
+    index = ui->chipSelectComboBox->currentIndex();
+    if (index <= CHIP_INDEX_DEFAULT)
+    {
+        qInfo() << "Chip is not selected";
+        return;
+    }
+
+    chipName = ui->chipSelectComboBox->currentText();
+    pageSize = prog->isIncSpare() ?
+                   currentChipDb->extendedPageSizeGetByName(chipName) :
+                   currentChipDb->pageSizeGetByName(chipName);
+    if (!pageSize)
+    {
+        qInfo() << "Chip page size is unknown";
+        return;
+    }
+
+    quint64 start_address =
+        ui->blockSizeValueLabel->text().toULongLong(nullptr, 16)
+        * ui->firstSpinBox->value();
+
+    areaSize = workFile.size();
+
+    if (areaSize % pageSize)
+    {
+        areaSize = (areaSize / pageSize + 1) * pageSize;
+    }
+
+    quint64 setSize =
+        ui->blockSizeValueLabel->text().toULongLong(nullptr, 16)
+            * (ui->lastSpinBox->value() + 1) - start_address;
+
+    if (setSize < areaSize)
+        areaSize = setSize;
+
+    qInfo() << "Reading data ...";
+    setProgress(0);
+
+    connect(prog, SIGNAL(readChipCompleted(quint64)), this,
+            SLOT(slotProgVerifyCompleted(quint64)));
+    connect(prog, SIGNAL(readChipProgress(quint64)), this,
+            SLOT(slotProgVerifyProgress(quint64)));
+
+    ui->filePathLineEdit->setDisabled(true);
+    ui->selectFilePushButton->setDisabled(true);
+
+    buffer.clear();
+
+    prog->readChip(&buffer, start_address, areaSize, true);
 }
 
 void MainWindow::slotProgWriteCompleted(int status)
 {
-    disconnect(prog, SIGNAL(writeChipProgress(unsigned int)), this,
-        SLOT(slotProgWriteProgress(unsigned int)));
+    disconnect(prog, SIGNAL(writeChipProgress(quint64)), this,
+        SLOT(slotProgWriteProgress(quint64)));
     disconnect(prog, SIGNAL(writeChipCompleted(int)), this,
         SLOT(slotProgWriteCompleted(int)));
+
+    ui->filePathLineEdit->setDisabled(false);
+    ui->selectFilePushButton->setDisabled(false);
 
     if (!status)
         qInfo() << "Data has been successfully written";
 
     setProgress(100);
+    workFile.close();
 }
 
-void MainWindow::slotProgWriteProgress(unsigned int progress)
+void MainWindow::slotProgWriteProgress(quint64 progress)
 {
     uint32_t progressPercent;
-    uint32_t bufferSize = static_cast<uint32_t>(buffer.size());
 
-    progressPercent = progress * 100ULL / bufferSize;
+    progressPercent = progress * 100ULL / areaSize;
     setProgress(progressPercent);
+
+    qint64 readSize = workFile.read((char *)buffer.data(), pageSize);
+
+    if (readSize < 0)
+    {
+        qCritical() << "Failed to read file";
+        return;
+    }
+    else if (readSize == 0)
+    {
+        return;
+    }
+    else if (readSize < pageSize)
+    {
+        std::fill(buffer.data() + readSize, buffer.data() + pageSize, 0xFF);
+    }
 }
 
 void MainWindow::slotProgWrite()
 {
     int index;
     QString chipName;
-    uint32_t pageSize, bufferSize;
 
-    if (buffer.isEmpty())
+    workFile.setFileName(ui->filePathLineEdit->text());
+    if (!workFile.open(QIODevice::ReadOnly))
     {
-        qInfo() << "Write buffer is empty";
+        qCritical() << "Failed to open file:" << ui->filePathLineEdit->text() << ", error:" <<
+            workFile.errorString();
+        return;
+    }
+    if (!workFile.size())
+    {
+        qInfo() << "Write file is empty";
         return;
     }
 
@@ -442,46 +570,94 @@ void MainWindow::slotProgWrite()
         return;
     }
 
-    bufferSize = static_cast<uint32_t>(buffer.size());
-    if (bufferSize % pageSize)
+    quint64 start_address =
+            ui->blockSizeValueLabel->text().toULongLong(nullptr, 16)
+            * ui->firstSpinBox->value();
+
+    areaSize = workFile.size();
+
+    if (areaSize % pageSize)
     {
-        bufferSize = (bufferSize / pageSize + 1) * pageSize;
-        buffer.resize(static_cast<int>(bufferSize));
+        areaSize = (areaSize / pageSize + 1) * pageSize;
     }
+
+    quint64 setSize =
+            ui->blockSizeValueLabel->text().toULongLong(nullptr, 16)
+            * (ui->lastSpinBox->value() + 1) - start_address;
+
+    if (setSize < areaSize)
+        areaSize = setSize;
 
     qInfo() << "Writing data ...";
 
     connect(prog, SIGNAL(writeChipCompleted(int)), this,
         SLOT(slotProgWriteCompleted(int)));
-    connect(prog, SIGNAL(writeChipProgress(unsigned int)), this,
-        SLOT(slotProgWriteProgress(unsigned int)));
+    connect(prog, SIGNAL(writeChipProgress(quint64)), this,
+        SLOT(slotProgWriteProgress(quint64)));
 
-    prog->writeChip(buffer.data(), START_ADDRESS, bufferSize, pageSize);
+    ui->filePathLineEdit->setDisabled(true);
+    ui->selectFilePushButton->setDisabled(true);
+
+    buffer.resize(pageSize);
+    qint64 readSize = workFile.read((char *)buffer.data(), pageSize);
+    if (readSize < 0)
+    {
+        qCritical() << "Failed to read file";
+        return;
+    }
+    else if (readSize == 0)
+    {
+        qInfo() << "File is empty";
+        return;
+    }
+    else if (readSize < pageSize)
+    {
+        std::fill(buffer.data() + readSize, buffer.data() + pageSize, 0xFF);
+    }
+    prog->writeChip(&buffer, start_address, areaSize, pageSize);
 }
 
-void MainWindow::slotProgReadBadBlocksCompleted(int status)
+void MainWindow::slotProgReadBadBlocksCompleted(quint64 status)
 {
-    disconnect(prog, SIGNAL(readChipBadBlocksCompleted(int)), this,
-        SLOT(slotProgReadBadBlocksCompleted(int)));
+    disconnect(prog, SIGNAL(readChipBadBlocksCompleted(quint64)), this,
+        SLOT(slotProgReadBadBlocksCompleted(quint64)));
+    disconnect(prog, SIGNAL(readChipBadBlocksProgress(quint64)), this,
+        SLOT(slotProgReadBadBlocksProgress(quint64)));
 
     if (!status)
         qInfo() << "Bad blocks have been successfully read";
+
+    setProgress(100);
+}
+
+void MainWindow::slotProgReadBadBlocksProgress(quint64 progress)
+{
+    uint32_t progressPercent;
+    QString chipName = ui->chipSelectComboBox->currentText();
+    quint64 pageNum =
+        currentChipDb->extendedTotalSizeGetByName(chipName) /
+        currentChipDb->extendedPageSizeGetByName(chipName);
+
+    progressPercent = progress * 100ULL / pageNum;
+    setProgress(progressPercent);
 }
 
 void MainWindow::slotProgReadBadBlocks()
 {
     qInfo() << "Reading bad blocks ...";
 
-    connect(prog, SIGNAL(readChipBadBlocksCompleted(int)), this,
-        SLOT(slotProgReadBadBlocksCompleted(int)));
+    connect(prog, SIGNAL(readChipBadBlocksCompleted(quint64)), this,
+        SLOT(slotProgReadBadBlocksCompleted(quint64)));
+    connect(prog, SIGNAL(readChipBadBlocksProgress(quint64)), this,
+        SLOT(slotProgReadBadBlocksProgress(quint64)));
 
     prog->readChipBadBlocks();
 }
 
-void MainWindow::slotProgSelectCompleted(int status)
+void MainWindow::slotProgSelectCompleted(quint64 status)
 {
-    disconnect(prog, SIGNAL(confChipCompleted(int)), this,
-        SLOT(slotProgSelectCompleted(int)));
+    disconnect(prog, SIGNAL(confChipCompleted(quint64)), this,
+        SLOT(slotProgSelectCompleted(quint64)));
 
     if (!status)
     {
@@ -512,8 +688,10 @@ void MainWindow::slotSelectChip(int selectedChipNum)
 
     if ((chipInfo = parallelChipDb.chipInfoGetByName(name)))
         currentChipDb = &parallelChipDb;
-    else if ((chipInfo = spiChipDb.chipInfoGetByName(name)))
-        currentChipDb = &spiChipDb;
+    else if ((chipInfo = spiNorDb.chipInfoGetByName(name)))
+        currentChipDb = &spiNorDb;
+    else if ((chipInfo = spiNandDb.chipInfoGetByName(name)))
+        currentChipDb = &spiNandDb;
     else
     {
         qCritical() << "Failed to find chip in DB";
@@ -522,8 +700,8 @@ void MainWindow::slotSelectChip(int selectedChipNum)
 
     qInfo() << "Configuring programmer ...";
 
-    connect(prog, SIGNAL(confChipCompleted(int)), this,
-        SLOT(slotProgSelectCompleted(int)));
+    connect(prog, SIGNAL(confChipCompleted(quint64)), this,
+        SLOT(slotProgSelectCompleted(quint64)));
 
     if (chipInfo)
         prog->confChip(chipInfo);
@@ -531,20 +709,18 @@ void MainWindow::slotSelectChip(int selectedChipNum)
 
 void MainWindow::detectChipDelayed()
 {
-
-    if (currentChipDb == &spiChipDb)
+    if (currentChipDb == &spiNandDb)
         qInfo() << "Chip not found in database";
+    else if(currentChipDb == &spiNorDb)
+        detectChip(&spiNandDb);
     else
-    {
-        // Search in next DB
-        detectChip(&spiChipDb);
-    }
+        detectChip(&spiNorDb);
 }
 
 void MainWindow::setChipNameDelayed()
 {
     QString chipName = currentChipDb->getNameByChipId(chipId.makerId,
-        chipId.deviceId, chipId.thirdId, chipId.fourthId, chipId.fifthId);
+        chipId.deviceId, chipId.thirdId, chipId.fourthId, chipId.fifthId, chipId.sixthId);
 
     for (int i = 0; i < ui->chipSelectComboBox->count(); i++)
     {
@@ -553,30 +729,31 @@ void MainWindow::setChipNameDelayed()
     }
 }
 
-void MainWindow::slotProgDetectChipReadChipIdCompleted(int status)
+void MainWindow::slotProgDetectChipReadChipIdCompleted(quint64 status)
 {
     QString idStr;
     QString chipName;
 
-    disconnect(prog, SIGNAL(readChipIdCompleted(int)), this,
-        SLOT(slotProgDetectChipReadChipIdCompleted(int)));
+    disconnect(prog, SIGNAL(readChipIdCompleted(quint64)), this,
+        SLOT(slotProgDetectChipReadChipIdCompleted(quint64)));
 
-    if (status < 0)
+    if (status == UINT64_MAX)
         return;
 
-    idStr = tr("0x%1 0x%2 0x%3 0x%4 0x%5")
+    idStr = tr("0x%1 0x%2 0x%3 0x%4 0x%5 0x%6")
         .arg(chipId.makerId, 2, 16, QLatin1Char('0'))
         .arg(chipId.deviceId, 2, 16, QLatin1Char('0'))
         .arg(chipId.thirdId, 2, 16, QLatin1Char('0'))
         .arg(chipId.fourthId, 2, 16, QLatin1Char('0'))
-        .arg(chipId.fifthId, 2, 16, QLatin1Char('0'));
+        .arg(chipId.fifthId, 2, 16, QLatin1Char('0'))
+        .arg(chipId.sixthId, 2, 16, QLatin1Char('0'));
 
     ui->deviceValueLabel->setText(idStr);
 
     qInfo() << QString("ID ").append(idStr).toLatin1().data();
 
     chipName = currentChipDb->getNameByChipId(chipId.makerId, chipId.deviceId,
-        chipId.thirdId, chipId.fourthId, chipId.fifthId);
+        chipId.thirdId, chipId.fourthId, chipId.fifthId, chipId.sixthId);
 
     if (chipName.isEmpty())
     {
@@ -589,17 +766,17 @@ void MainWindow::slotProgDetectChipReadChipIdCompleted(int status)
 
 void MainWindow::detectChipReadChipIdDelayed()
 {
-    connect(prog, SIGNAL(readChipIdCompleted(int)), this,
-        SLOT(slotProgDetectChipReadChipIdCompleted(int)));
+    connect(prog, SIGNAL(readChipIdCompleted(quint64)), this,
+        SLOT(slotProgDetectChipReadChipIdCompleted(quint64)));
     prog->readChipId(&chipId);
 }
 
-void MainWindow::slotProgDetectChipConfCompleted(int status)
+void MainWindow::slotProgDetectChipConfCompleted(quint64 status)
 {
-    disconnect(prog, SIGNAL(confChipCompleted(int)), this,
-        SLOT(slotProgDetectChipConfCompleted(int)));
+    disconnect(prog, SIGNAL(confChipCompleted(quint64)), this,
+        SLOT(slotProgDetectChipConfCompleted(quint64)));
 
-    if (status < 0)
+    if (status == UINT64_MAX)
         return;
 
     QTimer::singleShot(50, this, &MainWindow::detectChipReadChipIdDelayed);
@@ -620,8 +797,8 @@ void MainWindow::detectChip(ChipDb *chipDb)
         return;
     }
 
-    connect(prog, SIGNAL(confChipCompleted(int)), this,
-        SLOT(slotProgDetectChipConfCompleted(int)));
+    connect(prog, SIGNAL(confChipCompleted(quint64)), this,
+        SLOT(slotProgDetectChipConfCompleted(quint64)));
     prog->confChip(chipInfo);
 }
 
@@ -645,6 +822,8 @@ void MainWindow::slotSettingsProgrammer()
         prog->isIncSpare())).toBool());
     progDialog.setHwEccEnabled((settings.value(SETTINGS_ENABLE_HW_ECC,
         prog->isHwEccEnabled())).toBool());
+    progDialog.setAlertEnabled((settings.value(SETTINGS_ENABLE_ALERT,
+        isAlertEnabled)).toBool());
 
     if (progDialog.exec() == QDialog::Accepted)
     {
@@ -652,6 +831,7 @@ void MainWindow::slotSettingsProgrammer()
         settings.setValue(SETTINGS_SKIP_BAD_BLOCKS, progDialog.isSkipBB());
         settings.setValue(SETTINGS_INCLUDE_SPARE_AREA, progDialog.isIncSpare());
         settings.setValue(SETTINGS_ENABLE_HW_ECC, progDialog.isHwEccEnabled());
+        settings.setValue(SETTINGS_ENABLE_ALERT, progDialog.isAlertEnabled());
         settings.sync();
 
         updateProgSettings();
@@ -673,6 +853,13 @@ void MainWindow::updateProgSettings()
     }
     if (settings.contains(SETTINGS_ENABLE_HW_ECC))
         prog->setHwEccEnabled(settings.value(SETTINGS_ENABLE_HW_ECC).toBool());
+    if (settings.contains(SETTINGS_ENABLE_ALERT))
+        isAlertEnabled = settings.value(SETTINGS_ENABLE_ALERT).toBool();
+
+    if (ui->chipSelectComboBox->currentIndex() > 0)
+    {
+        setUiStateSelected(true);
+    }
 }
 
 void MainWindow::slotSettingsParallelChipDb()
@@ -683,9 +870,17 @@ void MainWindow::slotSettingsParallelChipDb()
         updateChipList();
 }
 
-void MainWindow::slotSettingsSpiChipDb()
+void MainWindow::slotSettingsSpiNorDb()
 {
-    SpiChipDbDialog chipDbDialog(&spiChipDb, this);
+    SpiNorDbDialog chipDbDialog(&spiNorDb, this);
+
+    if (chipDbDialog.exec() == QDialog::Accepted)
+        updateChipList();
+}
+
+void MainWindow::slotSettingsSpiNandDb()
+{
+    SpiNandDbDialog chipDbDialog(&spiNandDb, this);
 
     if (chipDbDialog.exec() == QDialog::Accepted)
         updateChipList();
@@ -700,7 +895,8 @@ void MainWindow::updateChipList()
     ui->chipSelectComboBox->addItem(CHIP_NAME_DEFAULT);
 
     chipNames.append(parallelChipDb.getNames());
-    chipNames.append(spiChipDb.getNames());
+    chipNames.append(spiNorDb.getNames());
+    chipNames.append(spiNandDb.getNames());
     foreach (const QString &str, chipNames)
     {
         if (str.isEmpty())
@@ -720,13 +916,44 @@ void MainWindow::slotAboutDialog()
 
 void MainWindow::setProgress(unsigned int progress)
 {
-    statusBar()->showMessage(tr("Progress: %1%").arg(progress));
+    static unsigned int old_progress = 100;
+    QTime Qtime_passed, Qtime_total;
+
+    if(old_progress == progress)
+        return;
+
+    old_progress = progress;
+
+    if(progress == 0)
+    {
+        timer.restart();
+        Qtime_passed = QTime::fromMSecsSinceStartOfDay(0);
+        Qtime_total = QTime::fromMSecsSinceStartOfDay(0);
+    }
+    else
+    {
+        Qtime_passed = QTime::fromMSecsSinceStartOfDay(timer.elapsed());
+        Qtime_total = QTime::fromMSecsSinceStartOfDay(timer.elapsed() * 100 / progress);
+    }
+    statusBar()->showMessage(tr("Progress: %1%    Passed: %2    Total: %3")
+                             .arg(progress)
+                             .arg(Qtime_passed.toString("hh:mm:ss"))
+                             .arg(Qtime_total.toString("hh:mm:ss")));
+
+    if((progress == 100) && isAlertEnabled)
+    {
+        QMessageBox *msgBox = new QMessageBox(this);
+        msgBox->setIcon(QMessageBox::Information);
+        msgBox->setText("Completed.");
+        msgBox->setAttribute(Qt::WA_DeleteOnClose);
+        msgBox->open();
+    }
 }
 
 void MainWindow::slotProgFirmwareUpdateCompleted(int status)
 {
-    disconnect(prog, SIGNAL(firmwareUpdateProgress(unsigned int)), this,
-        SLOT(slotProgFirmwareUpdateProgress(unsigned int)));
+    disconnect(prog, SIGNAL(firmwareUpdateProgress(quint64)), this,
+        SLOT(slotProgFirmwareUpdateProgress(quint64)));
     disconnect(prog, SIGNAL(firmwareUpdateCompleted(int)), this,
         SLOT(slotProgFirmwareUpdateCompleted(int)));
 
@@ -736,7 +963,7 @@ void MainWindow::slotProgFirmwareUpdateCompleted(int status)
     setProgress(100);
 }
 
-void MainWindow::slotProgFirmwareUpdateProgress(unsigned int progress)
+void MainWindow::slotProgFirmwareUpdateProgress(quint64 progress)
 {
     setProgress(progress);
 }
@@ -756,7 +983,39 @@ void MainWindow::slotFirmwareUpdateDialog()
     qInfo() << "Firmware update ...";
     connect(prog, SIGNAL(firmwareUpdateCompleted(int)), this,
         SLOT(slotProgFirmwareUpdateCompleted(int)));
-    connect(prog, SIGNAL(firmwareUpdateProgress(unsigned int)), this,
-        SLOT(slotProgFirmwareUpdateProgress(unsigned int)));
+    connect(prog, SIGNAL(firmwareUpdateProgress(quint64)), this,
+        SLOT(slotProgFirmwareUpdateProgress(quint64)));
     prog->firmwareUpdate(fileName);
 }
+
+void MainWindow::slotSelectFilePath()
+{
+    QString filePath = ui->filePathLineEdit->text();
+
+    QFileDialog selectFile(this);
+    selectFile.setWindowTitle(tr("Choose a file."));
+    selectFile.setDirectory(filePath);
+    selectFile.setNameFilter(tr("Binary file(*.bin);;All Files(*)"));
+    selectFile.setViewMode(QFileDialog::Detail);
+    selectFile.setLabelText(QFileDialog::Accept, tr("Select"));
+    selectFile.setLabelText(QFileDialog::Reject, tr("Cancel"));
+    if (selectFile.exec())
+    {
+        filePath = selectFile.selectedFiles().at(0);
+        ui->filePathLineEdit->setText(filePath);
+        ui->dataViewer->setFile(filePath);
+        QSettings settings(SETTINGS_ORGANIZATION_NAME, SETTINGS_APPLICATION_NAME);
+        settings.setValue(SETTINGS_WORK_FILE_PATH, filePath);
+    }
+}
+
+void MainWindow::slotFilePathEditingFinished()
+{
+    if (ui->filePathLineEdit->text().isEmpty())
+        return;
+    QString filePath = ui->filePathLineEdit->text();
+    ui->dataViewer->setFile(filePath);
+    QSettings settings(SETTINGS_ORGANIZATION_NAME, SETTINGS_APPLICATION_NAME);
+    settings.setValue(SETTINGS_WORK_FILE_PATH, filePath);
+}
+

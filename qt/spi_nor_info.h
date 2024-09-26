@@ -3,12 +3,12 @@
  *  it under the terms of the GNU General Public License version 3.
  */
 
-#ifndef SPI_CHIP_INFO_H
-#define SPI_CHIP_INFO_H
+#ifndef SPI_NOR_INFO_H
+#define SPI_NOR_INFO_H
 
 #include "chip_info.h"
 
-class SpiChipInfo : public ChipInfo
+class SpiNorInfo : public ChipInfo
 {
 public:
     enum
@@ -28,19 +28,20 @@ public:
         CHIP_PARAM_ID3,
         CHIP_PARAM_ID4,
         CHIP_PARAM_ID5,
+        CHIP_PARAM_ID6,
         CHIP_PARAM_NUM,
     };
 
 private:
     QByteArray halConf;
-    uint32_t params[CHIP_PARAM_NUM] = {};
+    quint64 params[CHIP_PARAM_NUM] = {};
 
 public:
-    SpiChipInfo();
-    virtual ~SpiChipInfo();
+    SpiNorInfo();
+    virtual ~SpiNorInfo();
     const QByteArray &getHalConf() override;
-    uint32_t getParam(uint32_t num) override;
-    int setParam(uint32_t num, uint32_t value) override;
+    quint64 getParam(uint32_t num) override;
+    int setParam(uint32_t num, quint64 value) override;
 };
 
-#endif // SPI_CHIP_INFO_H
+#endif // SPI_NOR_INFO_H

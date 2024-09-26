@@ -58,52 +58,52 @@ QVariant ParallelChipDbTableModel::data(const QModelIndex &index,
     case ParallelChipDb::CHIP_PARAM_BB_MARK_OFF:
         return chipDb->getBBMarkOffset(index.row());
     case ParallelChipDb::CHIP_PARAM_T_CS:
-        return chipDb->getChipParam(index.row(),
+        return (uint)chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_T_CS);
     case ParallelChipDb::CHIP_PARAM_T_CLS:
-        return chipDb->getChipParam(index.row(),
+        return (uint)chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_T_CLS);
     case ParallelChipDb::CHIP_PARAM_T_ALS:
-        return chipDb->getChipParam(index.row(),
+        return (uint)chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_T_ALS);
     case ParallelChipDb::CHIP_PARAM_T_CLR:
-        return chipDb->getChipParam(index.row(),
+        return (uint)chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_T_CLR);
     case ParallelChipDb::CHIP_PARAM_T_AR:
-        return chipDb->getChipParam(index.row(),
+        return (uint)chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_T_AR);
     case ParallelChipDb::CHIP_PARAM_T_WP:
-        return chipDb->getChipParam(index.row(),
+        return (uint)chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_T_WP);
     case ParallelChipDb::CHIP_PARAM_T_RP:
-        return chipDb->getChipParam(index.row(),
+        return (uint)chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_T_RP);
     case ParallelChipDb::CHIP_PARAM_T_DS:
-        return chipDb->getChipParam(index.row(),
+        return (uint)chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_T_DS);
     case ParallelChipDb::CHIP_PARAM_T_CH:
-        return chipDb->getChipParam(index.row(),
+        return (uint)chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_T_CH);
     case ParallelChipDb::CHIP_PARAM_T_CLH:
-        return chipDb->getChipParam(index.row(),
+        return (uint)chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_T_CLH);
     case ParallelChipDb::CHIP_PARAM_T_ALH:
-        return chipDb->getChipParam(index.row(),
+        return (uint)chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_T_ALH);
     case ParallelChipDb::CHIP_PARAM_T_WC:
-        return chipDb->getChipParam(index.row(),
+        return (uint)chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_T_WC);
     case ParallelChipDb::CHIP_PARAM_T_RC:
-        return chipDb->getChipParam(index.row(),
+        return (uint)chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_T_RC);
     case ParallelChipDb::CHIP_PARAM_T_REA:
-        return chipDb->getChipParam(index.row(),
+        return (uint)chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_T_REA);
     case ParallelChipDb::CHIP_PARAM_ROW_CYCLES:
-        return chipDb->getChipParam(index.row(),
+        return (uint)chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_ROW_CYCLES);
     case ParallelChipDb::CHIP_PARAM_COL_CYCLES:
-        return chipDb->getChipParam(index.row(),
+        return (uint)chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_COL_CYCLES);
     case ParallelChipDb::CHIP_PARAM_READ1_CMD:
         chipDb->getHexStringFromParam(chipDb->getChipParam(index.row(),
@@ -180,6 +180,10 @@ QVariant ParallelChipDbTableModel::data(const QModelIndex &index,
     case ParallelChipDb::CHIP_PARAM_ID5:
         chipDb->getHexStringFromOptParam(chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_ID5), paramStr);
+        return paramStr;
+    case ParallelChipDb::CHIP_PARAM_ID6:
+        chipDb->getHexStringFromOptParam(chipDb->getChipParam(index.row(),
+            ParallelChipInfo::CHIP_PARAM_ID6), paramStr);
         return paramStr;
     }
 
@@ -275,6 +279,8 @@ QVariant ParallelChipDbTableModel::headerData(int section,
             return tr("ID 4");
         case ParallelChipDb::CHIP_PARAM_ID5:
             return tr("ID 5");
+        case ParallelChipDb::CHIP_PARAM_ID6:
+            return tr("ID 6");
         }
     }
 
@@ -366,6 +372,8 @@ QVariant ParallelChipDbTableModel::headerData(int section,
             return tr("Chip ID 4th byte");
         case ParallelChipDb::CHIP_PARAM_ID5:
             return tr("Chip ID 5th byte");
+        case ParallelChipDb::CHIP_PARAM_ID6:
+            return tr("Chip ID 6th byte");
         }
     }
 
@@ -380,7 +388,7 @@ Qt::ItemFlags ParallelChipDbTableModel::flags (const QModelIndex &index) const
 bool ParallelChipDbTableModel::setData(const QModelIndex &index,
     const QVariant &value, int role)
 {
-    uint32_t paramVal;
+    quint64 paramVal;
 
     if (role != Qt::EditRole)
         return false;
@@ -674,6 +682,14 @@ bool ParallelChipDbTableModel::setData(const QModelIndex &index,
             return false;
         chipDb->setChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_ID5, paramVal);
+        return true;
+    case ParallelChipDb::CHIP_PARAM_ID6:
+        if (chipDb->getOptParamFromHexString(value.toString(), paramVal))
+            return false;
+        if (!chipDb->isOptParamValid(paramVal, 0x00, 0xFF))
+            return false;
+        chipDb->setChipParam(index.row(),
+            ParallelChipInfo::CHIP_PARAM_ID6, paramVal);
         return true;
     }
 

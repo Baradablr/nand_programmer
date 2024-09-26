@@ -18,15 +18,13 @@ Reader::Reader()
 
 Reader::~Reader()
 {
-    stop();
 }
 
-void Reader::init(const QString &portName, qint32 baudRate, uint8_t *rbuf,
-    uint32_t rlen, const uint8_t *wbuf, uint32_t wlen, bool isSkipBB,
+void Reader::init(SerialPort *serialPort, QVector<uint8_t> *rbuf,
+    quint64 rlen, const uint8_t *wbuf, uint32_t wlen, bool isSkipBB,
     bool isReadLess)
 {
-    this->portName = portName;
-    this->baudRate = baudRate;
+    this->serialPort = serialPort;
     this->rbuf = rbuf;
     this->rlen = rlen;
     this->wbuf = wbuf;
@@ -162,7 +160,9 @@ int Reader::handleData(char *pbuf, uint32_t len)
         return -1;
     }
 
-    memcpy(rbuf + readOffset, data, dataSize);
+    QVector<uint8_t>tmp(dataSize);
+    memcpy(tmp.data(), data, dataSize);
+    rbuf->append(tmp);
     readOffset += dataSize;
     bytesRead += dataSize;
 
@@ -250,7 +250,7 @@ int Reader::read(char *pbuf, uint32_t len)
     std::function<void(int)> cb = std::bind(&Reader::readCb, this,
         std::placeholders::_1);
 
-    if (serialPort->asyncReadWithTimeout(pbuf, len, cb, READ_TIMEOUT) < 0)
+    if (serialPort->asyncRead(pbuf, len, cb, READ_TIMEOUT) < 0)
     {
         logErr("Failed to read data");
         return -1;
@@ -259,54 +259,16 @@ int Reader::read(char *pbuf, uint32_t len)
     return 0;
 }
 
-int Reader::serialPortCreate()
-{
-    serialPort = new SerialPort();
-
-    if (!serialPort->start(portName.toLatin1(), baudRate))
-        return -1;
-
-    return 0;
-}
-
-void Reader::serialPortDestroy()
-{
-    if (!serialPort)
-        return;
-    serialPort->stop();
-    delete serialPort;
-    serialPort = nullptr;
-}
-
 void Reader::start()
 {
-    if (serialPortCreate())
-    {
-        emit result(-1);
-        goto Error;
-    }
-
     if (read(pbuf, bufSize) < 0)
     {
         emit result(-1);
-        goto Error;
+        return;
     }
 
     if (readStart())
-    {
         emit result(-1);
-        goto Error;
-    }
-
-    return;
-
-Error:
-    serialPortDestroy();
-}
-
-void Reader::stop()
-{
-    serialPortDestroy();
 }
 
 void Reader::logErr(const QString& msg)

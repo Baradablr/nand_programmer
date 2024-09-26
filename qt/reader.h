@@ -16,22 +16,18 @@ class Reader : public QObject
     static const uint32_t bufSize = 4096;
 
     SerialPort *serialPort = nullptr;
-    QString portName;
-    qint32 baudRate;
-    uint8_t *rbuf;
-    uint32_t rlen;
+    QVector<uint8_t> *rbuf;
+    quint64 rlen;
     const uint8_t *wbuf;
     uint32_t wlen;
-    uint32_t readOffset;
-    uint32_t bytesRead;
-    uint32_t bytesReadNotified;
+    quint64 readOffset;
+    quint64 bytesRead;
+    quint64 bytesReadNotified;
     int offset;
     bool isSkipBB;
     bool isReadLess;
     char pbuf[bufSize];
 
-    int serialPortCreate();
-    void serialPortDestroy();
     int write(const uint8_t *data, uint32_t len);
     int readStart();
     int read(char *pbuf, uint32_t len);
@@ -49,14 +45,13 @@ public:
     explicit Reader();
     ~Reader();
 
-    void init(const QString &portName, qint32 baudRate, uint8_t *rbuf,
-        uint32_t rlen, const uint8_t *wbuf, uint32_t wlen, bool isSkipBB,
+    void init(SerialPort *serialPort, QVector<uint8_t> *rbuf,
+        quint64 rlen, const uint8_t *wbuf, uint32_t wlen, bool isSkipBB,
         bool isReadLess);
     void start();
-    void stop();
 signals:
-    void result(int ret);
-    void progress(unsigned int progress);
+    void result(quint64 ret);
+    void progress(quint64 progress);
     void log(QtMsgType msgType, QString msg);
 };
 
